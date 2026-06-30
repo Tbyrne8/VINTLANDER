@@ -400,7 +400,7 @@ export default function CheckIn() {
                 }`}
               >
                 <span>{item.label}</span>
-                <strong>{item.correct ? "✓" : "✕"}</strong>
+                <strong>{item.correct ? "PASS" : "CHECK"}</strong>
               </div>
             ))}
           </div>

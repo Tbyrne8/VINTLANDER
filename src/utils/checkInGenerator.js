@@ -129,7 +129,7 @@ export function generateCheckIn(selectedAircraftId = "random") {
 
   const transmissions = [
     {
-      title: "TRANSMISSION 1 / 4 — AIRCRAFT",
+      title: "TRANSMISSION 1 / 4 - AIRCRAFT",
       lines: [
         "VINTAGE 10.",
         `THIS IS ${callsign}.`,
@@ -138,7 +138,7 @@ export function generateCheckIn(selectedAircraftId = "random") {
       ],
     },
     {
-      title: "TRANSMISSION 2 / 4 — POSITION",
+      title: "TRANSMISSION 2 / 4 - POSITION",
       lines: [
         `CURRENTLY HOLDING ${direction}.`,
         altitude.includes("ANGELS") ? altitude + "." : `ALTITUDE ${altitude}.`,
@@ -146,7 +146,7 @@ export function generateCheckIn(selectedAircraftId = "random") {
       ],
     },
     {
-      title: "TRANSMISSION 3 / 4 — AIRCRAFT CAPABILITY",
+      title: "TRANSMISSION 3 / 4 - AIRCRAFT CAPABILITY",
       lines: [
         `${ordnance}.`,
         `${aircraft.capabilities}.`,
@@ -154,7 +154,7 @@ export function generateCheckIn(selectedAircraftId = "random") {
       ],
     },
     {
-      title: "TRANSMISSION 4 / 4 — ADMINISTRATION",
+      title: "TRANSMISSION 4 / 4 - ADMINISTRATION",
       lines: [`ABORT CODE ${abortCode}.`, "NO FURTHER REMARKS."],
     },
   ];

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import * as mgrs from "mgrs";
 
-export default function IsrFeed({ position, targets }) {  const [open, setOpen] = useState(false);
+export default function IsrFeed({ position, targets }) {
+  const [open, setOpen] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [unlocked, setUnlocked] = useState(false);
 
@@ -45,7 +46,7 @@ export default function IsrFeed({ position, targets }) {  const [open, setOpen] 
             <>
               <div className="vdlFeed">
                 <div className="vdlReticle"></div>
-                <div className="vdlAircraftOrbit">⟳</div>
+                <div className="vdlAircraftOrbit">ISR</div>
               </div>
 
               <div className="vdlData">

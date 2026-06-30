@@ -62,20 +62,24 @@ export default function TargetRegister({
       {targets.length === 0 && <p className="emptyText">No saved targets yet.</p>}
 
       {targets.map((target) => (
-<div key={target.id} className={`targetItem ${target.type}`}>
-  <button onClick={() => goToTarget(target)}>
-    <strong>{target.id}</strong>
-    <span>{target.description}</span>
-    <small>{target.type.toUpperCase()} — {target.mgrs}</small>
-  </button>
+        <div key={target.id} className={`targetItem ${target.type}`}>
+          <button onClick={() => goToTarget(target)}>
+            <strong>{target.id}</strong>
+            <span>{target.description}</span>
+            <small>
+              {target.type.toUpperCase()} - {target.mgrs}
+            </small>
+          </button>
 
-  <button
-    className="removeTarget"
-    onClick={() => setTargets(targets.filter((item) => item.id !== target.id))}
-  >
-    Remove
-  </button>
-</div>
+          <button
+            className="removeTarget"
+            onClick={() =>
+              setTargets(targets.filter((item) => item.id !== target.id))
+            }
+          >
+            Remove
+          </button>
+        </div>
       ))}
     </div>
   );

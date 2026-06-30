@@ -1,10 +1,10 @@
-
 import * as mgrs from "mgrs";
 import {
   getBearingDegrees,
   getCompassDirection,
   getDistanceMetres,
 } from "../utils/geo.js";
+
 export default function ObserverPanel({
   observerPosition,
   setObserverPosition,
@@ -14,7 +14,6 @@ export default function ObserverPanel({
   showObserverLine,
   setShowObserverLine,
 }) {
-  
   const hasObserver = Boolean(observerPosition);
 
   const distance = hasObserver
@@ -23,7 +22,9 @@ export default function ObserverPanel({
 
   const bearing = hasObserver
     ? getBearingDegrees(observerPosition, position)
-    : null;const direction = hasObserver ? getCompassDirection(bearing) : null;
+    : null;
+
+  const direction = hasObserver ? getCompassDirection(bearing) : null;
 
   function setOpHere() {
     setObserverPosition(position);
@@ -45,9 +46,9 @@ export default function ObserverPanel({
       {hasObserver && (
         <>
           <button onClick={goToOp}>Centre on OP</button>
-<button onClick={() => setShowObserverLine(!showObserverLine)}>
-  {showObserverLine ? "Hide OP Line" : "Show OP Line"}
-</button>
+          <button onClick={() => setShowObserverLine(!showObserverLine)}>
+            {showObserverLine ? "Hide OP Line" : "Show OP Line"}
+          </button>
 
           <div className="dataRow">
             <span>OP GRID</span>
@@ -61,12 +62,12 @@ export default function ObserverPanel({
             </strong>
           </div>
 
-<div className="dataRow">
-  <span>BRG TO XHAIR</span>
-  <strong>
-    {bearing.toFixed(0)}° / {direction}
-  </strong>
-</div>
+          <div className="dataRow">
+            <span>BRG TO XHAIR</span>
+            <strong>
+              {bearing.toFixed(0)} deg / {direction}
+            </strong>
+          </div>
 
           <div className="dataRow">
             <span>DIST TO XHAIR</span>
@@ -80,7 +81,9 @@ export default function ObserverPanel({
       )}
 
       {!hasObserver && (
-        <p className="emptyText">No OP set. Move crosshair to your position and press Set OP.</p>
+        <p className="emptyText">
+          No OP set. Move crosshair to your position and press Set OP.
+        </p>
       )}
     </div>
   );

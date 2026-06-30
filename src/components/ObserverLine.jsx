@@ -1,14 +1,24 @@
-import { Polyline } from "@vis.gl/react-google-maps";
+import { useEffect } from "react";
+import { useMap } from "@vis.gl/react-google-maps";
 
 export default function ObserverLine({ observerPosition, position, showLine }) {
-  if (!observerPosition || !showLine) return null;
+  const map = useMap();
 
-  return (
-    <Polyline
-      path={[observerPosition, position]}
-      strokeColor="#00ff66"
-      strokeOpacity={0.9}
-      strokeWeight={2}
-    />
-  );
+  useEffect(() => {
+    if (!map || !observerPosition || !showLine || !window.google?.maps) {
+      return undefined;
+    }
+
+    const line = new window.google.maps.Polyline({
+      path: [observerPosition, position],
+      strokeColor: "#00ff66",
+      strokeOpacity: 0.9,
+      strokeWeight: 2,
+      map,
+    });
+
+    return () => line.setMap(null);
+  }, [map, observerPosition, position, showLine]);
+
+  return null;
 }
