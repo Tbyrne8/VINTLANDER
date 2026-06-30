@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Map } from "@vis.gl/react-google-maps";
 import * as mgrs from "mgrs";
 import TargetMarkers from "../components/TargetMarkers.jsx";
@@ -14,16 +14,31 @@ import ObserverMarker from "../components/ObserverMarker.jsx";
 import ObserverLine from "../components/ObserverLine.jsx";
 import MapContextMenu from "../components/MapContextMenu.jsx";
 
+const savedTargets = "vintlander.targets";
+
+function loadSavedTargets() {
+  try {
+    const saved = window.localStorage.getItem(savedTargets);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function MapTrainer({ platforms, setPlatforms }) {
   const [mgrsInput, setMgrsInput] = useState("");
   const [position, setPosition] = useState({ lat: 51.5072, lng: -0.1276 });
   const [mapType, setMapType] = useState("satellite");
   const [zoom, setZoom] = useState(13);
   const [mapResetKey, setMapResetKey] = useState(0);
-  const [targets, setTargets] = useState([]);
+  const [targets, setTargets] = useState(loadSavedTargets);
   const [observerPosition, setObserverPosition] = useState(null);
   const [showObserverLine, setShowObserverLine] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedTargets, JSON.stringify(targets));
+  }, [targets]);
 
   function plotMgrs() {
     try {
@@ -41,10 +56,25 @@ export default function MapTrainer({ platforms, setPlatforms }) {
     );
   }
 
+  function clearMission() {
+    const confirmed = window.confirm(
+      "Clear checked-in aircraft and saved targets for this mission?"
+    );
+
+    if (!confirmed) return;
+
+    setPlatforms([]);
+    setTargets([]);
+  }
+
   return (
     <main className="mapPage">
       <section className="mapControls">
         <h1>Mission Panel</h1>
+
+        <button className="clearMission" onClick={clearMission}>
+          Clear Mission
+        </button>
 
         <MapControls
           mgrsInput={mgrsInput}

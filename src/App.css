@@ -229,6 +229,13 @@ select {
 .removeTarget {
   background: #5a1f1f;
 }
+
+.clearMission {
+  width: 100%;
+  margin-bottom: 12px;
+  background: #5a1f1f;
+  border: 1px solid #8b3535;
+}
 .vdlWindow {
   position: absolute;
   right: 16px;

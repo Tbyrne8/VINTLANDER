@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { APIProvider } from "@vis.gl/react-google-maps";
 import "./App.css";
 
@@ -8,9 +8,24 @@ import NineLine from "./pages/NineLine.jsx";
 import MapTrainer from "./pages/MapTrainer.jsx";
 import CheckIn from "./pages/CheckIn.jsx";
 
+const savedPlatforms = "vintlander.platforms";
+
+function loadSavedPlatforms() {
+  try {
+    const saved = window.localStorage.getItem(savedPlatforms);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
   const [page, setPage] = useState("home");
-  const [platforms, setPlatforms] = useState([]);
+  const [platforms, setPlatforms] = useState(loadSavedPlatforms);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedPlatforms, JSON.stringify(platforms));
+  }, [platforms]);
 
   return (
     <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
