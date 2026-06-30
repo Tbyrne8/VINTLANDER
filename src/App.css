@@ -1,0 +1,573 @@
+body {
+  margin: 0;
+  background: #0e130e;
+  color: #f2f2f2;
+  font-family: Arial, sans-serif;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+.nav {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background: #1d281d;
+  position: sticky;
+  top: 0;
+}
+
+.nav button {
+  background: #2f3f2f;
+  color: white;
+  border: 1px solid #4c634c;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.page {
+  padding: 20px;
+  max-width: 1000px;
+  margin: auto;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.card {
+  background: #1d281d;
+  border: 1px solid #3f563f;
+  padding: 16px;
+  border-radius: 12px;
+  margin: 12px 0;
+}
+
+.field {
+  display: block;
+  margin: 12px 0;
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 70px;
+  margin-top: 6px;
+  border-radius: 8px;
+  border: 0;
+  padding: 10px;
+}
+
+@media (max-width: 700px) {
+  .nav,
+  .grid {
+    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+
+  .nav {
+    flex-wrap: wrap;
+  }
+}
+input,
+select {
+  width: 100%;
+  padding: 10px;
+  margin: 6px 0;
+  border-radius: 8px;
+  border: 0;
+}
+
+.mapPage {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  height: calc(100vh - 58px);
+}
+
+.mapControls {
+  padding: 16px;
+  background: #172017;
+  height: calc(100vh - 58px);
+  overflow-y: auto;
+}
+
+.mapBox {
+  height: calc(100vh - 58px);
+  position: relative;
+}
+
+
+.mapBox > div {
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 700px) {
+  .mapPage {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .mapBox {
+    height: 55vh;
+  }
+}
+.mapControls {
+  max-height: calc(100vh - 58px);
+  overflow-y: scroll;
+  border-right: 2px solid #f5c542;
+}
+
+.mapControls::after {
+  content: "End of panel";
+  display: block;
+  padding: 20px;
+  color: #f5c542;
+}
+.crosshairOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 90px;
+  height: 90px;
+  transform: translate(-50%, -50%);
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: "";
+  position: absolute;
+  background: white;
+  opacity: 0.95;
+}
+
+.crosshair::before {
+  left: 44px;
+  top: 0;
+  width: 2px;
+  height: 90px;
+}
+
+.crosshair::after {
+  left: 0;
+  top: 44px;
+  width: 90px;
+  height: 2px;
+}
+
+.crosshairCenter {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #00ff66;
+  transform: translate(-50%, -50%);
+}
+.hiddenButton {
+  display: none;
+}
+.targetData {
+  background: #0b120b;
+  border: 1px solid #4c634c;
+  border-radius: 12px;
+  padding: 14px;
+  margin: 14px 0;
+}
+
+.targetData h2 {
+  margin-top: 0;
+  color: #f5c542;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.dataRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #2f3f2f;
+  padding: 8px 0;
+}
+
+.dataRow span {
+  color: #aab7aa;
+}
+
+.dataRow strong {
+  color: #ffffff;
+  text-align: right;
+  word-break: break-word;
+}
+.targetItem {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.targetItem button:first-child {
+  text-align: left;
+}
+
+.removeTarget {
+  background: #5a1f1f;
+}
+.vdlWindow {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 8;
+  width: 320px;
+  background: rgba(9, 14, 9, 0.94);
+  border: 1px solid #4c634c;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.vdlHeader {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  background: #1d281d;
+  color: white;
+  border: 0;
+  padding: 10px 12px;
+}
+
+.vdlHeader span {
+  color: #f5c542;
+  font-weight: 700;
+}
+
+.vdlHeader strong {
+  font-size: 12px;
+}
+
+.vdlBody {
+  padding: 10px;
+}
+
+.vdlFeed {
+  position: relative;
+  height: 160px;
+  background:
+    radial-gradient(circle at center, rgba(255,255,255,0.12), transparent 35%),
+    linear-gradient(135deg, #1b2a1b, #050805);
+  border: 1px solid #3f563f;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.vdlReticle::before,
+.vdlReticle::after {
+  content: "";
+  position: absolute;
+  background: white;
+  opacity: 0.9;
+}
+
+.vdlReticle::before {
+  left: 50%;
+  top: 25%;
+  width: 2px;
+  height: 50%;
+}
+
+.vdlReticle::after {
+  left: 25%;
+  top: 50%;
+  width: 50%;
+  height: 2px;
+}
+
+.vdlAircraftOrbit {
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  color: #00ff66;
+  font-size: 28px;
+}
+
+.vdlData {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.vdlData div {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #2f3f2f;
+  padding-bottom: 4px;
+}
+
+.vdlData span {
+  color: #aab7aa;
+}
+
+.vdlData strong {
+  color: white;
+}
+.vdlWindow {
+  width: 320px !important;
+  max-width: 320px;
+  max-height: 360px;
+}
+
+.vdlWindow.closed {
+  height: auto;
+}
+
+.vdlWindow.open {
+  height: auto;
+}
+
+.vdlBody {
+  max-height: 310px;
+  overflow-y: auto;
+}
+
+@media (max-width: 700px) {
+  .vdlWindow {
+    width: 260px !important;
+    max-width: 260px;
+    right: 8px;
+    bottom: 8px;
+  }
+
+  .vdlFeed {
+    height: 120px;
+  }
+}
+.mapContextMenu {
+  position: fixed;
+  z-index: 20;
+  background: #0b120b;
+  border: 1px solid #f5c542;
+  border-radius: 10px;
+  padding: 8px;
+  width: 180px;
+}
+
+.mapContextMenu button {
+  display: block;
+  width: 100%;
+  margin: 4px 0;
+  text-align: left;
+}
+.kneeboardPage {
+  min-height: calc(100vh - 58px);
+  padding: 24px;
+  background: #0e130e;
+}
+
+.kneeboardCard {
+  max-width: 900px;
+  margin: auto;
+  background: #25311f;
+  border: 2px solid #6f7f58;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: inset 0 0 0 2px #111, 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.kneeboardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 2px solid #c9d2a3;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.kneeboardHeader h1 {
+  margin: 0;
+  color: #f5c542;
+  letter-spacing: 2px;
+}
+
+.kneeboardHeader p {
+  margin: 4px 0 0;
+  color: #d6dec2;
+}
+
+.transmitStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #d6dec2;
+  font-weight: 700;
+}
+
+.transmitStatus span {
+  width: 10px;
+  height: 10px;
+  background: #f5c542;
+  border-radius: 50%;
+}
+
+.kneeboardSection {
+  border: 1px solid #6f7f58;
+  border-radius: 10px;
+  padding: 12px;
+  margin: 12px 0;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.kneeboardSection h2 {
+  margin: 0 0 10px;
+  color: #f5c542;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+
+.kneeboardSection label {
+  display: block;
+  color: #d6dec2;
+  font-weight: 700;
+  margin: 10px 0;
+}
+
+.kneeboardSection input,
+.kneeboardSection textarea {
+  background: #e8ecd9;
+  color: #111;
+  border: 2px solid #111;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.kneeboardSection textarea {
+  min-height: 70px;
+}
+.radioPanel {
+  border: 1px solid #f5c542;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 14px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.radioPanel h2 {
+  margin-top: 0;
+  color: #f5c542;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+
+.radioText {
+  background: #060806;
+  border: 1px solid #4c634c;
+  border-radius: 10px;
+  padding: 12px;
+  color: #dfffdc;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.radioControls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.transmitStatus.receiving span {
+  background: #00ff66;
+}
+
+.resultsPanel {
+  margin-top: 14px;
+  border: 1px solid #f5c542;
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.resultsPanel h2 {
+  color: #f5c542;
+  margin-top: 0;
+}
+
+.resultRow {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #3f563f;
+  padding: 8px 0;
+}
+
+.resultRow.correct strong {
+  color: #00ff66;
+}
+
+.resultRow.incorrect strong {
+  color: #ff4d4d;
+}
+.modeToggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.modeToggle button {
+  flex: 1;
+}
+
+.activeMode {
+  background: #f5c542;
+  color: #111;
+  font-weight: 800;
+}
+.platformMonitor {
+  margin-top: 14px;
+  border: 1px solid #f5c542;
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.platformMonitor h2 {
+  color: #f5c542;
+  margin-top: 0;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+
+.platformCard {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #4c634c;
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.platformCard strong {
+  color: #00ff66;
+}
+
+.platformCard span,
+.platformCard small {
+  color: #d6dec2;
+}
+
+.radioText p {
+  margin: 0 0 8px;
+}
