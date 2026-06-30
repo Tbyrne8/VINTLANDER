@@ -20,7 +20,7 @@ const blankCheckIn = {
 
 const firstScenario = generateCheckIn("random");
 
-export default function CheckIn() {
+export default function CheckIn({ platforms, setPlatforms }) {
   const [selectedAircraft, setSelectedAircraft] = useState("random");
   const [scenario, setScenario] = useState(firstScenario);
   const [checkIn, setCheckIn] = useState(blankCheckIn);
@@ -30,7 +30,6 @@ export default function CheckIn() {
   const [complete, setComplete] = useState(false);
   const [results, setResults] = useState(null);
   const [guidedMode, setGuidedMode] = useState(true);
-  const [platforms, setPlatforms] = useState([]);
 
   const aircraftOptions = getAircraftOptions();
   const activeTransmission = scenario.transmissions[currentTransmission];
@@ -147,8 +146,19 @@ export default function CheckIn() {
         status: "CHECKED IN",
       };
 
-      setPlatforms([...platforms, newPlatform]);
+      setPlatforms((currentPlatforms) => [
+        ...currentPlatforms.filter(
+          (platform) => platform.callsign !== newPlatform.callsign
+        ),
+        newPlatform,
+      ]);
     }
+  }
+
+  function removePlatform(platformId) {
+    setPlatforms((currentPlatforms) =>
+      currentPlatforms.filter((platform) => platform.id !== platformId)
+    );
   }
 
   return (
@@ -421,6 +431,12 @@ export default function CheckIn() {
               <small>PLAYTIME: {platform.playtime}</small>
               <small>DL: {platform.downlinkCode}</small>
               <small>{platform.status}</small>
+              <button
+                className="removePlatform"
+                onClick={() => removePlatform(platform.id)}
+              >
+                Check Out
+              </button>
             </div>
           ))}
         </div>

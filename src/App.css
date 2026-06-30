@@ -465,6 +465,15 @@ select {
   background: rgba(0, 0, 0, 0.35);
 }
 
+@media (min-width: 900px) {
+  .radioPanel {
+    position: sticky;
+    top: 70px;
+    z-index: 6;
+    backdrop-filter: blur(8px);
+  }
+}
+
 .radioPanel h2 {
   margin-top: 0;
   color: #f5c542;
@@ -566,6 +575,12 @@ select {
 .platformCard span,
 .platformCard small {
   color: #d6dec2;
+}
+
+.removePlatform {
+  margin-top: 6px;
+  background: #5a1f1f;
+  border: 1px solid #8b3535;
 }
 
 .radioText p {

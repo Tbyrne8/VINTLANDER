@@ -14,7 +14,7 @@ import ObserverMarker from "../components/ObserverMarker.jsx";
 import ObserverLine from "../components/ObserverLine.jsx";
 import MapContextMenu from "../components/MapContextMenu.jsx";
 
-export default function MapTrainer() {
+export default function MapTrainer({ platforms, setPlatforms }) {
   const [mgrsInput, setMgrsInput] = useState("");
   const [position, setPosition] = useState({ lat: 51.5072, lng: -0.1276 });
   const [mapType, setMapType] = useState("satellite");
@@ -22,8 +22,8 @@ export default function MapTrainer() {
   const [mapResetKey, setMapResetKey] = useState(0);
   const [targets, setTargets] = useState([]);
   const [observerPosition, setObserverPosition] = useState(null);
-const [showObserverLine, setShowObserverLine] = useState(false);
-const [contextMenu, setContextMenu] = useState(null);
+  const [showObserverLine, setShowObserverLine] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null);
 
   function plotMgrs() {
     try {
@@ -33,6 +33,12 @@ const [contextMenu, setContextMenu] = useState(null);
     } catch {
       alert("Invalid MGRS grid");
     }
+  }
+
+  function removePlatform(platformId) {
+    setPlatforms((currentPlatforms) =>
+      currentPlatforms.filter((platform) => platform.id !== platformId)
+    );
   }
 
   return (
@@ -53,15 +59,41 @@ const [contextMenu, setContextMenu] = useState(null);
         />
 
         <TargetData position={position} zoom={zoom} mapType={mapType} />
-<ObserverPanel
-  observerPosition={observerPosition}
-  setObserverPosition={setObserverPosition}
-  position={position}
-  setPosition={setPosition}
-  setMapResetKey={setMapResetKey}
-  showObserverLine={showObserverLine}
-setShowObserverLine={setShowObserverLine}
-/>
+
+        <div className="platformMonitor compactMonitor">
+          <h2>AIR PICTURE / PLATFORMS</h2>
+
+          {platforms.length === 0 && (
+            <p className="emptyText">No aircraft checked in yet.</p>
+          )}
+
+          {platforms.map((platform) => (
+            <div key={platform.id} className="platformCard">
+              <strong>{platform.callsign}</strong>
+              <span>{platform.aircraft}</span>
+              <small>{platform.positionAltitude}</small>
+              <small>PLAYTIME: {platform.playtime}</small>
+              <small>DL: {platform.downlinkCode}</small>
+              <small>{platform.status}</small>
+              <button
+                className="removePlatform"
+                onClick={() => removePlatform(platform.id)}
+              >
+                Check Out
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <ObserverPanel
+          observerPosition={observerPosition}
+          setObserverPosition={setObserverPosition}
+          position={position}
+          setPosition={setPosition}
+          setMapResetKey={setMapResetKey}
+          showObserverLine={showObserverLine}
+          setShowObserverLine={setShowObserverLine}
+        />
 
         <TargetRegister
           targets={targets}
@@ -74,17 +106,17 @@ setShowObserverLine={setShowObserverLine}
         <TrainingNotes />
       </section>
 
-     <section
-  className="mapBox"
-  onContextMenu={(event) => {
-    event.preventDefault();
+      <section
+        className="mapBox"
+        onContextMenu={(event) => {
+          event.preventDefault();
 
-    setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
-    });
-  }}
->
+          setContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+          });
+        }}
+      >
         <Map
           key={mapResetKey}
           defaultCenter={position}
@@ -93,24 +125,25 @@ setShowObserverLine={setShowObserverLine}
           gestureHandling="auto"
           disableDefaultUI={true}
         >
-       <MapCentreTracker setPosition={setPosition} />
-<TargetMarkers targets={targets} />
-<ObserverMarker observerPosition={observerPosition} />
-<ObserverLine
-  observerPosition={observerPosition}
-  position={position}
-  showLine={showObserverLine}
-/>
+          <MapCentreTracker setPosition={setPosition} />
+          <TargetMarkers targets={targets} />
+          <ObserverMarker observerPosition={observerPosition} />
+          <ObserverLine
+            observerPosition={observerPosition}
+            position={position}
+            showLine={showObserverLine}
+          />
         </Map>
 
         <Crosshair />
         <MapContextMenu
-  contextMenu={contextMenu}
-  setContextMenu={setContextMenu}
-  position={position}
-  setObserverPosition={setObserverPosition}
-/>
-<IsrFeed position={position} targets={targets} />      </section>
+          contextMenu={contextMenu}
+          setContextMenu={setContextMenu}
+          position={position}
+          setObserverPosition={setObserverPosition}
+        />
+        <IsrFeed position={position} targets={targets} platforms={platforms} />
+      </section>
     </main>
   );
 }

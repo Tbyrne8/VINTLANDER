@@ -10,6 +10,7 @@ import CheckIn from "./pages/CheckIn.jsx";
 
 export default function App() {
   const [page, setPage] = useState("home");
+  const [platforms, setPlatforms] = useState([]);
 
   return (
     <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
@@ -25,8 +26,12 @@ export default function App() {
         {page === "home" && <Home />}
         {page === "tacp" && <TacpTraining />}
         {page === "nine" && <NineLine />}
-        {page === "map" && <MapTrainer />}
-        {page === "checkin" && <CheckIn />}
+        {page === "map" && (
+          <MapTrainer platforms={platforms} setPlatforms={setPlatforms} />
+        )}
+        {page === "checkin" && (
+          <CheckIn platforms={platforms} setPlatforms={setPlatforms} />
+        )}
       </div>
     </APIProvider>
   );

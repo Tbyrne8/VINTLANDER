@@ -1,23 +1,37 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as mgrs from "mgrs";
 
-export default function IsrFeed({ position, targets }) {
+export default function IsrFeed({ position, targets, platforms }) {
   const [open, setOpen] = useState(false);
   const [accessCode, setAccessCode] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
-
-  const correctCode = "VINTAGE";
+  const [unlockedPlatform, setUnlockedPlatform] = useState(null);
 
   const currentMgrs = mgrs
     .forward([position.lng, position.lat])
     .replace(/^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/, "$1 $2 $3 $4");
 
-  function unlockFeed() {
-    if (accessCode.trim().toUpperCase() === correctCode) {
-      setUnlocked(true);
-    } else {
-      alert("Incorrect ISR access code.");
+  useEffect(() => {
+    if (
+      unlockedPlatform &&
+      !platforms.some((platform) => platform.id === unlockedPlatform.id)
+    ) {
+      setUnlockedPlatform(null);
+      setAccessCode("");
     }
+  }, [platforms, unlockedPlatform]);
+
+  function unlockFeed() {
+    const enteredCode = accessCode.trim();
+    const platform = platforms.find(
+      (item) => item.downlinkCode === enteredCode
+    );
+
+    if (platform) {
+      setUnlockedPlatform(platform);
+      return;
+    }
+
+    alert("No checked-in aircraft matches that downlink code.");
   }
 
   return (
@@ -29,18 +43,27 @@ export default function IsrFeed({ position, targets }) {
 
       {open && (
         <div className="vdlBody">
-          {!unlocked ? (
+          {!unlockedPlatform ? (
             <div className="vdlLocked">
               <h3>ACCESS REQUIRED</h3>
-              <p>Enter downlink code from aircraft check-in.</p>
+              <p>Enter the downlink code from a checked-in aircraft.</p>
 
               <input
                 value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
-                placeholder="Downlink code"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, "");
+                  if (value.length <= 4) {
+                    setAccessCode(value);
+                  }
+                }}
+                placeholder="4-digit downlink code"
               />
 
               <button onClick={unlockFeed}>Unlock ISR Feed</button>
+
+              {platforms.length === 0 && (
+                <p className="emptyText">No aircraft are checked in yet.</p>
+              )}
             </div>
           ) : (
             <>
@@ -57,12 +80,17 @@ export default function IsrFeed({ position, targets }) {
 
                 <div>
                   <span>PLATFORM</span>
-                  <strong>REAPER 11</strong>
+                  <strong>{unlockedPlatform.callsign}</strong>
                 </div>
 
                 <div>
-                  <span>ORBIT</span>
-                  <strong>CIRCLE</strong>
+                  <span>AIRCRAFT</span>
+                  <strong>{unlockedPlatform.aircraft}</strong>
+                </div>
+
+                <div>
+                  <span>CAPABILITY</span>
+                  <strong>{unlockedPlatform.capabilities}</strong>
                 </div>
 
                 <div>
