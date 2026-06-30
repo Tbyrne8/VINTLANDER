@@ -1,0 +1,147 @@
+import { useState } from "react";
+import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
+import * as mgrs from "mgrs";
+import "./App.css";
+
+export default function App() {
+  const [page, setPage] = useState("home");
+  const [mgrsInput, setMgrsInput] = useState("");
+  const [position, setPosition] = useState({ lat: 51.5072, lng: -0.1276 });
+  const [mapType, setMapType] = useState("terrain");
+
+  function plotMgrs() {
+    try {
+      const [lng, lat] = mgrs.toPoint(mgrsInput.trim());
+      setPosition({ lat, lng });
+    } catch {
+      alert("Invalid MGRS grid");
+    }
+  }
+
+  return (
+    <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+      <div className="app">
+        <nav className="nav">
+          <button onClick={() => setPage("home")}>Home</button>
+          <button onClick={() => setPage("tacp")}>TACP Training</button>
+          <button onClick={() => setPage("nine")}>9-Line / TACAM</button>
+          <button onClick={() => setPage("map")}>Map Trainer</button>
+        </nav>
+
+        {page === "home" && (
+          <main className="page">
+            <h1>VINTAGE TACP Trainer</h1>
+            <p>UK/NATO-focused TACP training suite.</p>
+
+            <div className="grid">
+              <div className="card">Mission Generator</div>
+              <div className="card">Check-In Trainer</div>
+              <div className="card">Scenario Player</div>
+              <div className="card">Map Reading</div>
+            </div>
+          </main>
+        )}
+
+        {page === "tacp" && (
+          <main className="page">
+            <h1>TACP Training</h1>
+            <p>Training only. Not for live operations.</p>
+
+            <div className="card">
+              <h2>CAS Stage 1</h2>
+              <p>Aircraft check-in and initial admin practice.</p>
+            </div>
+
+            <div className="card">
+              <h2>CAS Stage 2</h2>
+              <p>Situation update and battlespace awareness.</p>
+            </div>
+
+            <div className="card">
+              <h2>CAS Stage 3</h2>
+              <p>Game plan, talk-on, and coordination practice.</p>
+            </div>
+          </main>
+        )}
+
+        {page === "nine" && (
+          <main className="page">
+            <h1>9-Line / TACAM Trainer</h1>
+
+            {[
+              "IP / BP",
+              "Heading",
+              "Distance",
+              "Target elevation",
+              "Target description",
+              "Target location",
+              "Mark",
+              "Friendlies",
+              "Egress",
+              "Remarks / restrictions",
+            ].map((field, index) => (
+              <label key={field} className="field">
+                {index + 1}. {field}
+                <textarea placeholder={`Enter ${field}`} />
+              </label>
+            ))}
+          </main>
+        )}
+
+        {page === "map" && (
+          <main className="mapPage">
+            <section className="mapControls">
+              <h1>Map Reading Trainer</h1>
+
+              <input
+                value={mgrsInput}
+                onChange={(e) => setMgrsInput(e.target.value)}
+                placeholder="Enter MGRS grid"
+              />
+
+              <button onClick={plotMgrs}>Plot MGRS</button>
+<button
+  onClick={() =>
+    window.open(
+      `https://www.google.com/maps/search/?api=1&query=${position.lat},${position.lng}`,
+      "_blank"
+    )
+  }
+>
+  Open in Google Maps
+</button>
+
+              <select
+                value={mapType}
+                onChange={(e) => setMapType(e.target.value)}
+              >
+                <option value="terrain">Terrain</option>
+                <option value="satellite">Satellite</option>
+                <option value="roadmap">Road Map</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+
+              <p>
+                Lat: {position.lat.toFixed(6)}
+                <br />
+                Lng: {position.lng.toFixed(6)}
+              </p>
+            </section>
+
+            <section className="mapBox">
+<Map
+  center={position}
+  zoom={13}
+  mapTypeId={mapType}
+  gestureHandling="greedy"
+  onClick={(event) => {
+    if (!event.detail.latLng) return;
+
+    setPosition({
+      lat: event.detail.latLng.lat,
+      lng: event.detail.latLng.lng,
+    });
+  }}
+>
+  <AdvancedMarker position={position} />
+</Map>
