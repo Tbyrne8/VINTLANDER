@@ -1,4 +1,8 @@
-export default function Home({ onNavigate, onStartSerial }) {
+export default function Home({
+  onNavigate,
+  onStartSerial,
+  onClearTrainingData,
+}) {
   return (
     <main className="page">
       <h1>VINTAGE JTAC Trainer</h1>
@@ -36,6 +40,19 @@ export default function Home({ onNavigate, onStartSerial }) {
           <span>Open the mission trainer without full-screen serial mode.</span>
         </button>
       </div>
+
+      <section className="card clearTrainingCard">
+        <div>
+          <h2>Reset Training Elements</h2>
+          <p>
+            Clear checked-in aircraft, OPs, targets, intel injects, attack briefs
+            and saved serial logs from this browser.
+          </p>
+        </div>
+        <button className="clearMission" onClick={onClearTrainingData}>
+          Clear All Training Data
+        </button>
+      </section>
     </main>
   );
 }

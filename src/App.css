@@ -123,14 +123,32 @@ textarea {
   align-items: center;
 }
 
+.clearTrainingCard {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  border-color: #8b3535;
+}
+
 .homeHero h2 {
   margin-top: 0;
   color: #f5c542;
 }
 
+.clearTrainingCard h2 {
+  margin-top: 0;
+  color: #ffb4a0;
+}
+
 .homeHero p {
   margin-bottom: 0;
   color: #c5d0c5;
+}
+
+.clearTrainingCard p {
+  margin-bottom: 0;
+  color: #d6dec2;
 }
 
 .homeHero button {
@@ -193,6 +211,7 @@ textarea {
   .pageHeader,
   .savedBrief,
   .homeHero,
+  .clearTrainingCard,
   .serialBar {
     grid-template-columns: 1fr;
     flex-direction: column;

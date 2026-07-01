@@ -9,6 +9,15 @@ import MapTrainer from "./pages/MapTrainer.jsx";
 import CheckIn from "./pages/CheckIn.jsx";
 
 const savedPlatforms = "vintlander.platforms";
+const missionStorageKeys = [
+  "vintlander.platforms",
+  "vintlander.targets",
+  "vintlander.observerPosition",
+  "vintlander.intelInjects",
+  "vintlander.targetDevelopmentStatus",
+  "vintlander.attackBriefs",
+  "vintlander.trainingLogs",
+];
 
 function loadSavedPlatforms() {
   try {
@@ -42,6 +51,17 @@ export default function App() {
     setPage("home");
   }
 
+  function clearTrainingData() {
+    const confirmed = window.confirm(
+      "Clear all standalone training data, including aircraft, OP, targets, intel, attack briefs and logs?"
+    );
+
+    if (!confirmed) return;
+
+    missionStorageKeys.forEach((key) => window.localStorage.removeItem(key));
+    setPlatforms([]);
+  }
+
   return (
     <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
       <div className={`app ${serialMode ? "serialMode" : ""}`}>
@@ -66,7 +86,11 @@ export default function App() {
         )}
 
         {page === "home" && (
-          <Home onNavigate={goToPage} onStartSerial={startFullSerial} />
+          <Home
+            onNavigate={goToPage}
+            onStartSerial={startFullSerial}
+            onClearTrainingData={clearTrainingData}
+          />
         )}
         {page === "tacp" && (
           <TacpTraining
