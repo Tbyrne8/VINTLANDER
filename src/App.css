@@ -754,6 +754,41 @@ select {
   z-index: 5;
 }
 
+.vdlLockPanel {
+  position: absolute;
+  left: 10px;
+  bottom: 24px;
+  z-index: 6;
+  display: grid;
+  gap: 1px;
+  min-width: 132px;
+  padding: 7px 8px;
+  border: 1px solid rgba(245, 197, 66, 0.78);
+  background: rgba(7, 17, 8, 0.78);
+  color: #dfffdc;
+  text-shadow: 0 1px 3px #000;
+}
+
+.vdlLockPanel span {
+  color: #f5c542;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.vdlLockPanel strong {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.vdlLockPanel small,
+.vdlLockPanel em {
+  color: #dfffdc;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .vdlStatusStrip {
   position: absolute;
   left: 8px;

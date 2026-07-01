@@ -16,6 +16,7 @@ export default function IsrFeed({
   const [sensorMode, setSensorMode] = useState("EO");
   const [zoomLevel, setZoomLevel] = useState(4);
   const [activeTargetId, setActiveTargetId] = useState(null);
+  const [trackLockedAt, setTrackLockedAt] = useState(null);
   const [feedTick, setFeedTick] = useState(0);
   const [orbitAnchor, setOrbitAnchor] = useState(position);
 
@@ -48,6 +49,12 @@ export default function IsrFeed({
   const targetRange = activeTarget
     ? formatDistance(getDistanceMetres(aircraftPosition, activeTarget.position))
     : "NO TRACK";
+  const targetBearing = activeTarget
+    ? getBearingDegrees(aircraftPosition, activeTarget.position)
+    : null;
+  const trackAgeSeconds =
+    activeTarget && trackLockedAt ? Math.floor((Date.now() - trackLockedAt) / 1000) : 0;
+  const trackQuality = activeTarget ? getTrackQuality(zoomLevel, trackAgeSeconds) : null;
   const feedHeading = useMemo(
     () =>
       activeTarget
@@ -113,6 +120,7 @@ export default function IsrFeed({
   useEffect(() => {
     if (activeTargetId && !targets.some((target) => target.id === activeTargetId)) {
       setActiveTargetId(null);
+      setTrackLockedAt(null);
     }
   }, [activeTargetId, targets]);
 
@@ -161,6 +169,16 @@ export default function IsrFeed({
 
       return sensorZoomLevels[nextIndex];
     });
+  }
+
+  function lockTarget(targetId) {
+    setActiveTargetId(targetId);
+    setTrackLockedAt(Date.now());
+  }
+
+  function breakTrack() {
+    setActiveTargetId(null);
+    setTrackLockedAt(null);
   }
 
   return (
@@ -281,7 +299,7 @@ export default function IsrFeed({
                       altitudeProfile,
                       feedHeading
                     )}
-                    onClick={() => setActiveTargetId(target.id)}
+                    onClick={() => lockTarget(target.id)}
                     title={`${target.id} ${target.description}`}
                   >
                     {index + 1}
@@ -289,6 +307,16 @@ export default function IsrFeed({
                 ))}
                 {!activeTarget && (
                   <div className="vdlNoTrack">NO TRACK SELECTED</div>
+                )}
+                {activeTarget && (
+                  <div className="vdlLockPanel">
+                    <span>TRACK LOCK</span>
+                    <strong>{activeTarget.id}</strong>
+                    <small>
+                      {targetRange} / BRG {targetBearing.toString().padStart(3, "0")}
+                    </small>
+                    <em>{trackQuality} / {formatTrackAge(trackAgeSeconds)}</em>
+                  </div>
                 )}
                 <div className="vdlStatusStrip">
                   <span>{feedCenterMgrs}</span>
@@ -368,6 +396,20 @@ export default function IsrFeed({
                 </div>
 
                 <div>
+                  <span>BRG TO TRACK</span>
+                  <strong>
+                    {targetBearing !== null
+                      ? `${targetBearing.toString().padStart(3, "0")} DEG`
+                      : "NONE"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>LOCK STATUS</span>
+                  <strong>{trackQuality || "AREA SEARCH"}</strong>
+                </div>
+
+                <div>
                   <span>TRACKS</span>
                   <strong>{targets.length}</strong>
                 </div>
@@ -384,7 +426,7 @@ export default function IsrFeed({
                   <button
                     key={target.id}
                     className={activeTarget?.id === target.id ? "activeTrack" : ""}
-                    onClick={() => setActiveTargetId(target.id)}
+                    onClick={() => lockTarget(target.id)}
                   >
                     <strong>{target.id}</strong>
                     <span>{target.description}</span>
@@ -397,9 +439,9 @@ export default function IsrFeed({
                 {activeTarget && (
                   <button
                     className="breakTrack"
-                    onClick={() => setActiveTargetId(null)}
+                    onClick={breakTrack}
                   >
-                    Return To Area Orbit
+                    Break Lock / Return To Area Orbit
                   </button>
                 )}
               </div>
@@ -445,6 +487,31 @@ function formatDistance(distance) {
   }
 
   return `${distance.toFixed(0)} M`;
+}
+
+function formatTrackAge(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function getTrackQuality(zoomLevel, trackAgeSeconds) {
+  if (trackAgeSeconds < 3) {
+    return "ACQUIRING";
+  }
+
+  if (zoomLevel >= 12) {
+    return "FIRM LOCK";
+  }
+
+  if (zoomLevel >= 4) {
+    return "STABLE";
+  }
+
+  return "AREA TRACK";
 }
 
 function getMovementHeading(center, tick, altitudeProfile, platformProfile) {
