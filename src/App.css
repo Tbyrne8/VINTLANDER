@@ -408,7 +408,9 @@ select {
   position: absolute;
   inset: 0;
   z-index: 0;
+  transform-origin: center;
   transition: filter 180ms ease, opacity 180ms ease;
+  will-change: transform;
 }
 
 .vdlLiveMap > div {
@@ -672,9 +674,37 @@ select {
 
 .vdlAircraftOrbit {
   right: 10px;
-  top: 8px;
+  top: 36px;
   max-width: 150px;
   text-align: right;
+}
+
+.vdlNorthMarker {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: 18px auto;
+  gap: 4px;
+  align-items: center;
+  padding: 3px 6px;
+  border: 1px solid rgba(0, 255, 102, 0.7);
+  background: rgba(7, 17, 8, 0.72);
+  color: #dfffdc;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+}
+
+.vdlNorthArrow {
+  display: grid;
+  place-items: center;
+  color: #00ff66;
+  font-size: 15px;
+  line-height: 1;
+  transform-origin: center;
+  text-shadow: 0 0 8px rgba(0, 255, 102, 0.8);
 }
 
 .vdlTrackBlip {

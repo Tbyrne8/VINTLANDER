@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Map } from "@vis.gl/react-google-maps";
 import * as mgrs from "mgrs";
 
+const sensorZoomLevels = [1, 4, 12, 32];
+
 export default function IsrFeed({
   position,
   targets,
@@ -12,7 +14,7 @@ export default function IsrFeed({
   const [accessCode, setAccessCode] = useState("");
   const [unlockedPlatform, setUnlockedPlatform] = useState(null);
   const [sensorMode, setSensorMode] = useState("EO");
-  const [zoomLevel, setZoomLevel] = useState(2);
+  const [zoomLevel, setZoomLevel] = useState(4);
   const [activeTargetId, setActiveTargetId] = useState(null);
   const [feedTick, setFeedTick] = useState(0);
   const [orbitAnchor, setOrbitAnchor] = useState(position);
@@ -46,13 +48,26 @@ export default function IsrFeed({
   const targetRange = activeTarget
     ? formatDistance(getDistanceMetres(aircraftPosition, activeTarget.position))
     : "NO TRACK";
+  const feedHeading = useMemo(
+    () =>
+      activeTarget
+        ? getBearingDegrees(aircraftPosition, activeTarget.position)
+        : getMovementHeading(orbitAnchor, feedTick, altitudeProfile, platformProfile),
+    [activeTarget, aircraftPosition, altitudeProfile, feedTick, orbitAnchor, platformProfile]
+  );
   const activeTargetPosition = activeTarget
-    ? getFeedPosition(feedCenter, activeTarget.position, zoomLevel, altitudeProfile)
+    ? getFeedPosition(
+        feedCenter,
+        activeTarget.position,
+        zoomLevel,
+        altitudeProfile,
+        feedHeading
+      )
     : null;
   const feedMapType = sensorMode === "MAP" ? "hybrid" : "satellite";
   const feedMapZoom = activeTarget
-    ? Math.min(20, altitudeProfile.trackZoomBase + zoomLevel)
-    : Math.min(18, altitudeProfile.areaZoomBase + zoomLevel);
+    ? Math.min(21, altitudeProfile.trackZoomBase + getSensorZoomMapBoost(zoomLevel))
+    : Math.min(20, altitudeProfile.areaZoomBase + getSensorZoomMapBoost(zoomLevel));
   const platformAltitude = formatPlatformAltitude(
     unlockedPlatform?.positionAltitude
   );
@@ -104,11 +119,20 @@ export default function IsrFeed({
   useEffect(() => {
     if (!unlockedPlatform) return undefined;
 
-    const timer = setInterval(() => {
-      setFeedTick((currentTick) => currentTick + 1);
-    }, 80);
+    let animationFrameId;
+    let lastFrameTime = performance.now();
 
-    return () => clearInterval(timer);
+    function animateFrame(frameTime) {
+      const elapsed = Math.min(48, frameTime - lastFrameTime);
+      lastFrameTime = frameTime;
+
+      setFeedTick((currentTick) => currentTick + elapsed / 80);
+      animationFrameId = window.requestAnimationFrame(animateFrame);
+    }
+
+    animationFrameId = window.requestAnimationFrame(animateFrame);
+
+    return () => window.cancelAnimationFrame(animationFrameId);
   }, [unlockedPlatform]);
 
   function unlockFeed() {
@@ -127,9 +151,16 @@ export default function IsrFeed({
   }
 
   function changeZoom(direction) {
-    setZoomLevel((currentZoom) =>
-      Math.min(4, Math.max(1, currentZoom + direction))
-    );
+    setZoomLevel((currentZoom) => {
+      const currentIndex = sensorZoomLevels.indexOf(currentZoom);
+      const nextIndex = clamp(
+        currentIndex + direction,
+        0,
+        sensorZoomLevels.length - 1
+      );
+
+      return sensorZoomLevels[nextIndex];
+    });
   }
 
   return (
@@ -182,7 +213,12 @@ export default function IsrFeed({
               </div>
 
               <div className={`vdlFeed ${sensorMode.toLowerCase()}Mode`}>
-                <div className="vdlLiveMap">
+                <div
+                  className="vdlLiveMap"
+                  style={{
+                    transform: `rotate(${-feedHeading}deg) scale(1.42)`,
+                  }}
+                >
                   <Map
                     key={`${feedMapZoom}-${feedMapType}`}
                     center={feedCenter}
@@ -220,6 +256,15 @@ export default function IsrFeed({
                 <div className="vdlReticle"></div>
                 <div className="vdlScanline"></div>
                 <div className="vdlModeTag">{sensorMode}</div>
+                <div className="vdlNorthMarker">
+                  <span
+                    className="vdlNorthArrow"
+                    style={{ transform: `rotate(${-feedHeading}deg)` }}
+                  >
+                    ^
+                  </span>
+                  <strong>N</strong>
+                </div>
                 <div className="vdlAircraftOrbit">
                   {unlockedPlatform.callsign} / {feedMode}
                 </div>
@@ -233,7 +278,8 @@ export default function IsrFeed({
                       feedCenter,
                       target.position,
                       zoomLevel,
-                      altitudeProfile
+                      altitudeProfile,
+                      feedHeading
                     )}
                     onClick={() => setActiveTargetId(target.id)}
                     title={`${target.id} ${target.description}`}
@@ -309,6 +355,11 @@ export default function IsrFeed({
                   <strong>
                     {sensorMode} / {zoomLevel}X
                   </strong>
+                </div>
+
+                <div>
+                  <span>FEED HDG</span>
+                  <strong>{feedHeading.toString().padStart(3, "0")} DEG</strong>
                 </div>
 
                 <div>
@@ -394,6 +445,35 @@ function formatDistance(distance) {
   }
 
   return `${distance.toFixed(0)} M`;
+}
+
+function getMovementHeading(center, tick, altitudeProfile, platformProfile) {
+  const previousPosition = getOrbitPosition(
+    center,
+    Math.max(0, tick - 8),
+    altitudeProfile,
+    platformProfile
+  );
+  const nextPosition = getOrbitPosition(
+    center,
+    tick + 8,
+    altitudeProfile,
+    platformProfile
+  );
+
+  return getBearingDegrees(previousPosition, nextPosition);
+}
+
+function getBearingDegrees(from, to) {
+  const metresPerDegreeLat = 111320;
+  const metresPerDegreeLng =
+    111320 * Math.cos(toRadians((from.lat + to.lat) / 2));
+  const eastMetres = (to.lng - from.lng) * metresPerDegreeLng;
+  const northMetres = (to.lat - from.lat) * metresPerDegreeLat;
+
+  return Math.round(
+    (Math.atan2(eastMetres, northMetres) * 180) / Math.PI + 360
+  ) % 360;
 }
 
 function getOrbitPosition(center, tick, altitudeProfile, platformProfile) {
@@ -620,37 +700,53 @@ function getPlatformProfile(aircraft = "") {
   };
 }
 
-function getFeedPositionStyle(center, target, zoomLevel, altitudeProfile) {
-  const point = getFeedPosition(center, target, zoomLevel, altitudeProfile);
+function getFeedPositionStyle(center, target, zoomLevel, altitudeProfile, heading) {
+  const point = getFeedPosition(center, target, zoomLevel, altitudeProfile, heading);
   return {
     left: `${point.left}%`,
     top: `${point.top}%`,
   };
 }
 
-function getFeedPosition(center, target, zoomLevel, altitudeProfile) {
+function getFeedPosition(center, target, zoomLevel, altitudeProfile, heading) {
   const metresPerDegreeLat = 111320;
   const metresPerDegreeLng =
     111320 * Math.cos(toRadians((center.lat + target.lat) / 2));
   const northMetres = (target.lat - center.lat) * metresPerDegreeLat;
   const eastMetres = (target.lng - center.lng) * metresPerDegreeLng;
+  const [rotatedEastMetres, rotatedNorthMetres] = rotateOffset(
+    eastMetres,
+    northMetres,
+    -heading
+  );
   const viewRadiusMetres = getViewRadiusMetres(zoomLevel, altitudeProfile);
 
   return {
-    left: clamp(50 + (eastMetres / viewRadiusMetres) * 45, 7, 93),
-    top: clamp(50 - (northMetres / viewRadiusMetres) * 45, 8, 92),
+    left: clamp(50 + (rotatedEastMetres / viewRadiusMetres) * 45, 7, 93),
+    top: clamp(50 - (rotatedNorthMetres / viewRadiusMetres) * 45, 8, 92),
   };
 }
 
 function getViewRadiusMetres(zoomLevel, altitudeProfile) {
   const radiusByZoom = {
-    1: 3600,
-    2: 2100,
-    3: 1100,
-    4: 560,
+    1: 5400,
+    4: 1900,
+    12: 620,
+    32: 210,
   };
 
-  return (radiusByZoom[zoomLevel] || radiusByZoom[2]) * altitudeProfile.radiusMultiplier;
+  return (radiusByZoom[zoomLevel] || radiusByZoom[4]) * altitudeProfile.radiusMultiplier;
+}
+
+function getSensorZoomMapBoost(zoomLevel) {
+  const boostByZoom = {
+    1: 0,
+    4: 2,
+    12: 4,
+    32: 6,
+  };
+
+  return boostByZoom[zoomLevel] || 0;
 }
 
 function clamp(value, min, max) {
