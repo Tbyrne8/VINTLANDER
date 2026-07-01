@@ -106,11 +106,65 @@ function digitsToWords(code) {
     .join(" ");
 }
 
+function lettersToPhonetics(value = "") {
+  const words = {
+    A: "ALPHA",
+    B: "BRAVO",
+    C: "CHARLIE",
+    D: "DELTA",
+    E: "ECHO",
+    F: "FOXTROT",
+    G: "GOLF",
+    H: "HOTEL",
+    I: "INDIA",
+    J: "JULIETT",
+    K: "KILO",
+    L: "LIMA",
+    M: "MIKE",
+    N: "NOVEMBER",
+    O: "OSCAR",
+    P: "PAPA",
+    Q: "QUEBEC",
+    R: "ROMEO",
+    S: "SIERRA",
+    T: "TANGO",
+    U: "UNIFORM",
+    V: "VICTOR",
+    W: "WHISKEY",
+    X: "XRAY",
+    Y: "YANKEE",
+    Z: "ZULU",
+  };
+
+  return value
+    .split("")
+    .map((character) => words[character] || character)
+    .join(" ");
+}
+
+function formatMissionNumberForVoice(missionNumber) {
+  return missionNumber.replace(
+    /MISSION\s*([A-Z]+)(\d+)/,
+    (_, letters, digits) =>
+      `MISSION ${lettersToPhonetics(letters)} ${digitsToWords(digits)}`
+  );
+}
+
 export function getAircraftOptions() {
   return Object.entries(aircraftLibrary).map(([id, aircraft]) => ({
     id,
     label: aircraft.label,
   }));
+}
+
+export function getCheckInLibrary(aircraftId = "typhoon") {
+  const aircraft = aircraftLibrary[aircraftId] || aircraftLibrary.typhoon;
+
+  return {
+    ...aircraft,
+    directions,
+    abortCodes,
+  };
 }
 
 export function generateCheckIn(selectedAircraftId = "random", options = {}) {
@@ -120,15 +174,17 @@ export function generateCheckIn(selectedAircraftId = "random", options = {}) {
 
   const aircraft = aircraftLibrary[aircraftId] || aircraftLibrary.typhoon;
 
-  const callsign = `${pick(aircraft.callsigns)} ${randomNumber(11, 99)}`;
-  const missionNumber = randomMissionNumber();
+  const callsign =
+    options.callsign || `${pick(aircraft.callsigns)} ${randomNumber(11, 99)}`;
+  const missionNumber = options.missionNumber || randomMissionNumber();
   const controllerCallsign = options.controllerCallsign || "VINTAGE 10";
-  const direction = pick(directions);
-  const altitude = pick(aircraft.altitudeOptions);
-  const playtime = pick(aircraft.playtimeOptions);
-  const ordnance = pick(aircraft.ordnanceOptions);
-  const downlinkCode = randomDownlink();
-  const abortCode = pick(abortCodes);
+  const direction = options.direction || pick(directions);
+  const altitude = options.altitude || pick(aircraft.altitudeOptions);
+  const playtime = options.playtime || pick(aircraft.playtimeOptions);
+  const ordnance = options.ordnance || pick(aircraft.ordnanceOptions);
+  const downlinkCode = options.downlinkCode || randomDownlink();
+  const abortCode = options.abortCode || pick(abortCodes);
+  const missionNumberVoice = formatMissionNumberForVoice(missionNumber);
 
   const correctCheckIn = {
     aircraftCallsign: callsign,
@@ -150,6 +206,12 @@ export function generateCheckIn(selectedAircraftId = "random", options = {}) {
         `${controllerCallsign}.`,
         `THIS IS ${callsign}.`,
         `${missionNumber}.`,
+        `${aircraft.numberAndType}.`,
+      ],
+      voiceLines: [
+        `${controllerCallsign}.`,
+        `THIS IS ${callsign}.`,
+        `${missionNumberVoice}.`,
         `${aircraft.numberAndType}.`,
       ],
     },

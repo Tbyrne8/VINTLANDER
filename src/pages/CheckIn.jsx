@@ -20,6 +20,11 @@ const blankCheckIn = {
 
 const firstScenario = generateCheckIn("random");
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
+const deliveryOptions = [
+  { id: "generatedText", label: "Generated text" },
+  { id: "generatedRadio", label: "Generated radio voice" },
+  { id: "dsVoice", label: "DS local voice" },
+];
 
 function loadPendingCheckIn() {
   try {
@@ -57,9 +62,15 @@ export default function CheckIn({
   const [results, setResults] = useState(null);
   const [guidedMode, setGuidedMode] = useState(!serialMode);
   const [pendingCheckIn, setPendingCheckIn] = useState(loadPendingCheckIn);
+  const [deliveryMode, setDeliveryMode] = useState("generatedText");
 
   const aircraftOptions = getAircraftOptions();
   const activeTransmission = scenario.transmissions[currentTransmission];
+  const activeDeliveryMode = serialMode
+    ? pendingCheckIn?.deliveryMode || "generatedText"
+    : deliveryMode;
+  const isDsVoiceMode = activeDeliveryMode === "dsVoice";
+  const isVoiceMode = activeDeliveryMode === "generatedRadio";
 
   useEffect(() => {
     if (serialMode) {
@@ -69,9 +80,13 @@ export default function CheckIn({
   }, [serialMode]);
 
   useEffect(() => {
-    if (!started || complete) return;
+    if (!started || complete) return undefined;
 
     setVisibleLineCount(0);
+
+    if (isDsVoiceMode || isVoiceMode) {
+      return undefined;
+    }
 
     let lineIndex = 0;
 
@@ -85,7 +100,30 @@ export default function CheckIn({
     }, 900);
 
     return () => clearInterval(timer);
-  }, [started, complete, currentTransmission, activeTransmission]);
+  }, [
+    started,
+    complete,
+    currentTransmission,
+    activeTransmission,
+    isDsVoiceMode,
+    isVoiceMode,
+  ]);
+
+  function speakTransmission() {
+    if (!window.speechSynthesis) {
+      alert("Voice playback is not available in this browser.");
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(
+      (activeTransmission.voiceLines || activeTransmission.lines).join(". ")
+    );
+    utterance.rate = 0.86;
+    utterance.pitch = 0.82;
+    utterance.volume = 0.95;
+    window.speechSynthesis.speak(utterance);
+  }
 
   function updateField(field, value) {
     setCheckIn({
@@ -103,9 +141,12 @@ export default function CheckIn({
     const aircraftId = serialMode
       ? pendingCheckIn.aircraftId
       : selectedAircraft;
-    const newScenario = generateCheckIn(aircraftId, {
-      controllerCallsign: pendingCheckIn?.controllerCallsign,
-    });
+    const newScenario =
+      serialMode && pendingCheckIn?.manualScenario
+        ? pendingCheckIn.manualScenario
+        : generateCheckIn(aircraftId, {
+            controllerCallsign: pendingCheckIn?.controllerCallsign,
+          });
 
     setScenario(newScenario);
     setCheckIn(blankCheckIn);
@@ -145,6 +186,32 @@ export default function CheckIn({
     return value.trim().toUpperCase().replace(/\s+/g, " ");
   }
 
+  function addCheckedInPlatform() {
+    const newPlatform = {
+      id: `${scenario.correctCheckIn.aircraftCallsign}-${Date.now()}`,
+      callsign: scenario.correctCheckIn.aircraftCallsign,
+      aircraft: scenario.correctCheckIn.aircraftNumberType,
+      positionAltitude: scenario.correctCheckIn.positionAltitude,
+      playtime: scenario.correctCheckIn.playtime,
+      checkedInAt: new Date().toISOString(),
+      downlinkCode: scenario.correctCheckIn.downlinkCode,
+      capabilities: scenario.correctCheckIn.capabilities,
+      status: "CHECKED IN",
+    };
+
+    setPlatforms((currentPlatforms) => [
+      ...currentPlatforms.filter(
+        (platform) => platform.callsign !== newPlatform.callsign
+      ),
+      newPlatform,
+    ]);
+
+    if (serialMode) {
+      window.localStorage.removeItem(savedPendingCheckIn);
+      setPendingCheckIn(null);
+    }
+  }
+
   function markCheckIn() {
     const checks = [
       ["A/C C/S", "aircraftCallsign"],
@@ -179,29 +246,7 @@ export default function CheckIn({
     setResults({ marked, score });
 
     if (score >= 70) {
-      const newPlatform = {
-        id: `${scenario.correctCheckIn.aircraftCallsign}-${Date.now()}`,
-        callsign: scenario.correctCheckIn.aircraftCallsign,
-        aircraft: scenario.correctCheckIn.aircraftNumberType,
-        positionAltitude: scenario.correctCheckIn.positionAltitude,
-        playtime: scenario.correctCheckIn.playtime,
-        checkedInAt: new Date().toISOString(),
-        downlinkCode: scenario.correctCheckIn.downlinkCode,
-        capabilities: scenario.correctCheckIn.capabilities,
-        status: "CHECKED IN",
-      };
-
-      setPlatforms((currentPlatforms) => [
-        ...currentPlatforms.filter(
-          (platform) => platform.callsign !== newPlatform.callsign
-        ),
-        newPlatform,
-      ]);
-
-      if (serialMode) {
-        window.localStorage.removeItem(savedPendingCheckIn);
-        setPendingCheckIn(null);
-      }
+      addCheckedInPlatform();
     }
   }
 
@@ -266,7 +311,8 @@ export default function CheckIn({
                   <small>DS pushed aircraft</small>
                   <p>
                     {pendingCheckIn.aircraftLabel} ready for check-in. Answer callsign{" "}
-                    {pendingCheckIn.controllerCallsign}.
+                    {pendingCheckIn.controllerCallsign}. Delivery:{" "}
+                    {pendingCheckIn.deliveryLabel || "Generated text"}.
                   </p>
                 </div>
               )}
@@ -288,6 +334,22 @@ export default function CheckIn({
               </label>
               )}
 
+              {!serialMode && (
+                <label>
+                  Delivery Mode
+                  <select
+                    value={deliveryMode}
+                    onChange={(event) => setDeliveryMode(event.target.value)}
+                  >
+                    {deliveryOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
               <p>
                 Press start. A new aircraft check-in will be generated each
                 time. Fill the slate card while the transmission is coming in,
@@ -302,20 +364,44 @@ export default function CheckIn({
             <>
               <h2>{activeTransmission.title}</h2>
 
-              <div className="radioText">
-                {activeTransmission.lines
-                  .slice(0, visibleLineCount)
-                  .map((line, index) => (
-                    <p key={`${line}-${index}`}>{line}</p>
-                  ))}
-              </div>
+              {isDsVoiceMode ? (
+                <div className="radioText voiceModePanel">
+                  <p>DS LOCAL VOICE MODE</p>
+                  <p>
+                    Listen to the DS / aircraft voice locally and complete the
+                    slate card. No generated check-in text is shown.
+                  </p>
+                </div>
+              ) : isVoiceMode ? (
+                <div className="radioText voiceModePanel">
+                  <p>GENERATED RADIO VOICE READY</p>
+                  <p>Use Play Radio Voice, then complete the slate card from audio.</p>
+                </div>
+              ) : (
+                <div className="radioText">
+                  {activeTransmission.lines
+                    .slice(0, visibleLineCount)
+                    .map((line, index) => (
+                      <p key={`${line}-${index}`}>{line}</p>
+                    ))}
+                </div>
+              )}
 
               <div className="radioControls">
-                <button onClick={repeatTransmission}>Repeat Last</button>
-                <button onClick={nextTransmission}>
-                  {currentTransmission === scenario.transmissions.length - 1
-                    ? "End Check-In"
-                    : "Next Transmission"}
+                {isVoiceMode && (
+                  <button onClick={speakTransmission}>Play Radio Voice</button>
+                )}
+                {!isDsVoiceMode && !isVoiceMode && (
+                  <button onClick={repeatTransmission}>Repeat Last</button>
+                )}
+                <button
+                  onClick={isDsVoiceMode ? () => setComplete(true) : nextTransmission}
+                >
+                  {isDsVoiceMode
+                    ? "End DS Voice Check-In"
+                    : currentTransmission === scenario.transmissions.length - 1
+                      ? "End Check-In"
+                      : "Next Transmission"}
                 </button>
               </div>
             </>
@@ -331,6 +417,11 @@ export default function CheckIn({
                   Review Transmissions
                 </button>
                 <button onClick={markCheckIn}>Mark Check-In</button>
+                {serialMode && isDsVoiceMode && (
+                  <button onClick={addCheckedInPlatform}>
+                    DS Authority Accept
+                  </button>
+                )}
                 {!serialMode && (
                   <button onClick={startCheckIn}>New Check-In</button>
                 )}

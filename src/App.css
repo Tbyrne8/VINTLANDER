@@ -1597,6 +1597,17 @@ select {
   line-height: 1.5;
 }
 
+.voiceModePanel {
+  border-color: #f5c542;
+  color: #f5c542;
+}
+
+.dsScriptPreview {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+
 .radioControls {
   display: flex;
   gap: 8px;

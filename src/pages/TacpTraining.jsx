@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Map } from "@vis.gl/react-google-maps";
 import * as mgrs from "mgrs";
-import { getAircraftOptions } from "../utils/checkInGenerator.js";
+import {
+  generateCheckIn,
+  getAircraftOptions,
+  getCheckInLibrary,
+} from "../utils/checkInGenerator.js";
 import TargetMarkers from "../components/TargetMarkers.jsx";
 import ObserverMarker from "../components/ObserverMarker.jsx";
 
@@ -194,6 +198,12 @@ const defaultAttackStatus = {
   reattack: "Not assessed",
 };
 
+const checkInDeliveryOptions = [
+  { id: "generatedText", label: "Generated text" },
+  { id: "generatedRadio", label: "Generated radio voice" },
+  { id: "dsVoice", label: "DS local voice" },
+];
+
 function loadSavedList(key) {
   try {
     const saved = window.localStorage.getItem(key);
@@ -328,6 +338,17 @@ export default function TacpTraining({
   const [intelText, setIntelText] = useState("");
   const [targetInjectType, setTargetInjectType] = useState("vague");
   const [selectedAttackBriefId, setSelectedAttackBriefId] = useState("");
+  const [checkInDeliveryMode, setCheckInDeliveryMode] = useState("generatedText");
+  const [manualCheckIn, setManualCheckIn] = useState({
+    callsign: "",
+    missionNumber: "",
+    direction: "NORTH",
+    altitude: "",
+    ordnance: "",
+    playtime: "",
+    downlinkCode: "",
+    abortCode: "",
+  });
   const [bdaEffect, setBdaEffect] = useState("Target effects unknown");
   const [bdaText, setBdaText] = useState("");
   const [reattackDecision, setReattackDecision] = useState("Await DS decision");
@@ -404,6 +425,27 @@ export default function TacpTraining({
   const selectedAircraftLabel =
     aircraftChoices.find((aircraft) => aircraft.id === selectedAircraft)?.label ||
     "Random aircraft";
+  const selectedAircraftId = selectedAircraft.replace("type:", "");
+  const selectedCheckInLibrary = getCheckInLibrary(
+    selectedAircraft === "random" ? "typhoon" : selectedAircraftId
+  );
+  const dsVoicePreview =
+    checkInDeliveryMode === "dsVoice"
+      ? generateCheckIn(
+          selectedAircraft === "random" ? "typhoon" : selectedAircraftId,
+          {
+            controllerCallsign: controller.callsign,
+            callsign: manualCheckIn.callsign || undefined,
+            missionNumber: manualCheckIn.missionNumber || undefined,
+            direction: manualCheckIn.direction,
+            altitude: manualCheckIn.altitude || undefined,
+            ordnance: manualCheckIn.ordnance || undefined,
+            playtime: manualCheckIn.playtime || undefined,
+            downlinkCode: manualCheckIn.downlinkCode || undefined,
+            abortCode: manualCheckIn.abortCode || undefined,
+          }
+        )
+      : null;
 
   const totalTasks = serialPhases.reduce(
     (sum, phase) => sum + phase.tasks.length,
@@ -462,11 +504,20 @@ export default function TacpTraining({
 
   function pushAircraftForCheckIn() {
     const aircraftId = selectedAircraft.replace("type:", "");
+    const manualScenario =
+      checkInDeliveryMode === "dsVoice"
+        ? dsVoicePreview
+        : null;
     const tasking = {
       id: `CHECKIN-${Date.now()}`,
       aircraftId,
       aircraftLabel: selectedAircraftLabel,
       controllerCallsign: controller.callsign,
+      deliveryMode: checkInDeliveryMode,
+      deliveryLabel:
+        checkInDeliveryOptions.find((option) => option.id === checkInDeliveryMode)
+          ?.label || "Generated text",
+      manualScenario,
       pushedAt: getTimestamp(),
       route: "Route to assigned IP and hold at the briefed height block for check-in.",
     };
@@ -914,6 +965,163 @@ export default function TacpTraining({
                 </select>
               </label>
 
+              <label className="field">
+                Check-in delivery
+                <select
+                  value={checkInDeliveryMode}
+                  onChange={(event) => setCheckInDeliveryMode(event.target.value)}
+                >
+                  {checkInDeliveryOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {checkInDeliveryMode === "dsVoice" && (
+                <div className="serialCard">
+                  <small>DS local voice script builder</small>
+
+                  <div className="grid compactGrid">
+                    <label className="field">
+                      Aircraft callsign
+                      <select
+                        value={manualCheckIn.callsign}
+                        onChange={(event) =>
+                          setManualCheckIn((current) => ({
+                            ...current,
+                            callsign: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Random callsign</option>
+                        {selectedCheckInLibrary.callsigns.map((callsign) => (
+                          <option key={callsign} value={`${callsign} 11`}>
+                            {callsign} 11
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="field">
+                      Direction
+                      <select
+                        value={manualCheckIn.direction}
+                        onChange={(event) =>
+                          setManualCheckIn((current) => ({
+                            ...current,
+                            direction: event.target.value,
+                          }))
+                        }
+                      >
+                        {selectedCheckInLibrary.directions.map((direction) => (
+                          <option key={direction}>{direction}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="grid compactGrid">
+                    <label className="field">
+                      Altitude
+                      <select
+                        value={manualCheckIn.altitude}
+                        onChange={(event) =>
+                          setManualCheckIn((current) => ({
+                            ...current,
+                            altitude: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Random altitude</option>
+                        {selectedCheckInLibrary.altitudeOptions.map((altitude) => (
+                          <option key={altitude}>{altitude}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="field">
+                      Playtime
+                      <select
+                        value={manualCheckIn.playtime}
+                        onChange={(event) =>
+                          setManualCheckIn((current) => ({
+                            ...current,
+                            playtime: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Random playtime</option>
+                        {selectedCheckInLibrary.playtimeOptions.map((playtime) => (
+                          <option key={playtime}>{playtime}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <label className="field">
+                    Ordnance
+                    <select
+                      value={manualCheckIn.ordnance}
+                      onChange={(event) =>
+                        setManualCheckIn((current) => ({
+                          ...current,
+                          ordnance: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Random ordnance</option>
+                      {selectedCheckInLibrary.ordnanceOptions.map((ordnance) => (
+                        <option key={ordnance}>{ordnance}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="grid compactGrid">
+                    <label className="field">
+                      Downlink code
+                      <input
+                        value={manualCheckIn.downlinkCode}
+                        onChange={(event) =>
+                          setManualCheckIn((current) => ({
+                            ...current,
+                            downlinkCode: event.target.value.replace(/[^0-9]/g, "").slice(0, 4),
+                          }))
+                        }
+                        placeholder="Random if blank"
+                      />
+                    </label>
+
+                    <label className="field">
+                      Abort code
+                      <select
+                        value={manualCheckIn.abortCode}
+                        onChange={(event) =>
+                          setManualCheckIn((current) => ({
+                            ...current,
+                            abortCode: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Random abort code</option>
+                        {selectedCheckInLibrary.abortCodes.map((abortCode) => (
+                          <option key={abortCode}>{abortCode}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="radioText dsScriptPreview">
+                    {dsVoicePreview?.transmissions
+                      .flatMap((transmission) => transmission.lines)
+                      .map((line) => (
+                        <p key={line}>{line}</p>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               <button onClick={pushAircraftForCheckIn}>
                 Push Aircraft For Check-In
               </button>
@@ -923,7 +1131,9 @@ export default function TacpTraining({
                   <small>Pending check-in</small>
                   <p>
                     {pendingCheckIn.aircraftLabel} pushed at {pendingCheckIn.pushedAt}.
-                    Troop should complete assessed check-in as {pendingCheckIn.controllerCallsign}.
+                    Troop should complete assessed check-in as{" "}
+                    {pendingCheckIn.controllerCallsign}. Delivery:{" "}
+                    {pendingCheckIn.deliveryLabel || "Generated text"}.
                   </p>
                 </div>
               )}
