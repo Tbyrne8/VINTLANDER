@@ -17,6 +17,7 @@ import AirPlatformMarker from "../components/AirPlatformMarker.jsx";
 import AirPlatformLocator from "../components/AirPlatformLocator.jsx";
 
 const savedTargets = "vintlander.targets";
+const savedObserverPosition = "vintlander.observerPosition";
 
 function loadSavedTargets() {
   try {
@@ -27,6 +28,15 @@ function loadSavedTargets() {
   }
 }
 
+function loadSavedObserverPosition() {
+  try {
+    const saved = window.localStorage.getItem(savedObserverPosition);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function MapTrainer({ platforms, setPlatforms }) {
   const [mgrsInput, setMgrsInput] = useState("");
   const [position, setPosition] = useState({ lat: 51.5072, lng: -0.1276 });
@@ -34,7 +44,7 @@ export default function MapTrainer({ platforms, setPlatforms }) {
   const [zoom, setZoom] = useState(13);
   const [mapResetKey, setMapResetKey] = useState(0);
   const [targets, setTargets] = useState(loadSavedTargets);
-  const [observerPosition, setObserverPosition] = useState(null);
+  const [observerPosition, setObserverPosition] = useState(loadSavedObserverPosition);
   const [showObserverLine, setShowObserverLine] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [airPlatformPosition, setAirPlatformPosition] = useState(null);
@@ -53,6 +63,18 @@ export default function MapTrainer({ platforms, setPlatforms }) {
   useEffect(() => {
     window.localStorage.setItem(savedTargets, JSON.stringify(targets));
   }, [targets]);
+
+  useEffect(() => {
+    if (observerPosition) {
+      window.localStorage.setItem(
+        savedObserverPosition,
+        JSON.stringify(observerPosition)
+      );
+      return;
+    }
+
+    window.localStorage.removeItem(savedObserverPosition);
+  }, [observerPosition]);
 
   useEffect(() => {
     if (!showAllPlatforms) return undefined;
@@ -99,6 +121,7 @@ export default function MapTrainer({ platforms, setPlatforms }) {
 
     setPlatforms([]);
     setTargets([]);
+    setObserverPosition(null);
   }
 
   return (

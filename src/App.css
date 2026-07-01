@@ -89,7 +89,8 @@ textarea {
   .compactGrid,
   .trainingGrid,
   .phaseGrid,
-  .readinessStrip {
+  .readinessStrip,
+  .targetStatusGrid {
     grid-template-columns: 1fr;
   }
 }
@@ -514,6 +515,41 @@ select {
 
 .callsignAddRow button {
   min-height: 40px;
+}
+
+.targetIntelList {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.targetStatusGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.targetStatusGrid button {
+  min-height: 44px;
+  padding: 8px;
+}
+
+.mapMonitorCard {
+  min-height: 420px;
+}
+
+.dsMapMonitor {
+  height: 340px;
+  overflow: hidden;
+  border: 1px solid #3f563f;
+  border-radius: 8px;
+  background: #101610;
+}
+
+.dsMapMonitor > div {
+  width: 100%;
+  height: 100%;
 }
 
 .phaseBoard {

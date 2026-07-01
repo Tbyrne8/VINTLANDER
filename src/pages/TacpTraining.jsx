@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
+import { Map } from "@vis.gl/react-google-maps";
+import * as mgrs from "mgrs";
 import { getAircraftOptions } from "../utils/checkInGenerator.js";
+import TargetMarkers from "../components/TargetMarkers.jsx";
+import ObserverMarker from "../components/ObserverMarker.jsx";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
+const savedTargets = "vintlander.targets";
+const savedObserverPosition = "vintlander.observerPosition";
+const savedIntelInjects = "vintlander.intelInjects";
+const savedTargetStatus = "vintlander.targetDevelopmentStatus";
 
 const serialPhases = [
   {
@@ -73,6 +81,8 @@ const defaultController = {
     "Initial ground picture pending. DS to build and push the situation update before aircraft check-in.",
   targetDevelopment:
     "Use the map trainer and ISR feed to find, mark or receive the target before progressing to talk-on.",
+  opTasking:
+    "OP not pushed. DS can set the OP or direct the troop to plot it on the map.",
   abortCode: "CHARLIE HOTEL",
   bda: "",
 };
@@ -126,6 +136,41 @@ const situationOptions = {
   ],
 };
 
+const targetInjectTypes = [
+  {
+    id: "exact",
+    label: "Push exact target",
+    template:
+      "Exact target passed by DS. Plot the grid, confirm target description, then prepare talk-on.",
+  },
+  {
+    id: "vague",
+    label: "Push vague intel",
+    template:
+      "Intel indicates enemy activity in the area. Use map study and ISR to narrow, plot and confirm.",
+  },
+  {
+    id: "suspected",
+    label: "Push suspected area",
+    template:
+      "Suspected target area only. Search the area, designate likely target location and await correlation.",
+  },
+  {
+    id: "moving",
+    label: "Push moving target report",
+    template:
+      "Moving target report. Track likely movement, update plotted position and maintain correlation.",
+  },
+];
+
+const targetStatuses = [
+  "Intel received",
+  "OP plotted",
+  "Target plotted",
+  "Target correlated",
+  "Target confirmed",
+];
+
 function loadSavedList(key) {
   try {
     const saved = window.localStorage.getItem(key);
@@ -152,8 +197,43 @@ function getDefaultCallsigns() {
   return ["VINTAGE 10", "VINTAGE 11", "CHAOS 20", "WIDOW 30"];
 }
 
+function loadSavedValue(key, fallback = null) {
+  try {
+    const saved = window.localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function formatMgrs(position) {
+  if (!position) return "NOT SET";
+
+  return mgrs
+    .forward([position.lng, position.lat])
+    .replace(/^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/, "$1 $2 $3 $4");
+}
+
+function parseMgrs(value) {
+  const [lng, lat] = mgrs.toPoint(value.replace(/\s+/g, "").trim());
+  return { lat, lng };
+}
+
 export default function TacpTraining({ platforms = [] }) {
   const [logs, setLogs] = useState(() => loadSavedList(savedTrainingLogs));
+  const [targets, setTargets] = useState(() => loadSavedList(savedTargets));
+  const [observerPosition, setObserverPosition] = useState(() =>
+    loadSavedValue(savedObserverPosition)
+  );
+  const [intelInjects, setIntelInjects] = useState(() =>
+    loadSavedList(savedIntelInjects)
+  );
+  const [targetStatus, setTargetStatus] = useState(() =>
+    loadSavedValue(savedTargetStatus, {
+      phase: "Intel pending",
+      notes: "No target development activity yet.",
+    })
+  );
   const [selectedAircraft, setSelectedAircraft] = useState("random");
   const [completedTasks, setCompletedTasks] = useState({});
   const [controller, setController] = useState(defaultController);
@@ -164,6 +244,12 @@ export default function TacpTraining({ platforms = [] }) {
     return saved.length ? saved : getDefaultCallsigns();
   });
   const [newCallsign, setNewCallsign] = useState("");
+  const [opGrid, setOpGrid] = useState("");
+  const [targetGrid, setTargetGrid] = useState("");
+  const [targetType, setTargetType] = useState("enemy");
+  const [targetDescription, setTargetDescription] = useState("");
+  const [intelText, setIntelText] = useState("");
+  const [targetInjectType, setTargetInjectType] = useState("vague");
   const [situationTemplate, setSituationTemplate] = useState({
     friendlyPosture: situationOptions.friendlyPosture[0],
     enemyActivity: situationOptions.enemyActivity[0],
@@ -176,6 +262,30 @@ export default function TacpTraining({ platforms = [] }) {
   useEffect(() => {
     window.localStorage.setItem(savedTrainingLogs, JSON.stringify(logs));
   }, [logs]);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedTargets, JSON.stringify(targets));
+  }, [targets]);
+
+  useEffect(() => {
+    if (observerPosition) {
+      window.localStorage.setItem(
+        savedObserverPosition,
+        JSON.stringify(observerPosition)
+      );
+      return;
+    }
+
+    window.localStorage.removeItem(savedObserverPosition);
+  }, [observerPosition]);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedIntelInjects, JSON.stringify(intelInjects));
+  }, [intelInjects]);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedTargetStatus, JSON.stringify(targetStatus));
+  }, [targetStatus]);
 
   useEffect(() => {
     window.localStorage.setItem(savedCallsigns, JSON.stringify(callsigns));
@@ -209,6 +319,8 @@ export default function TacpTraining({ platforms = [] }) {
   );
   const completedCount = Object.values(completedTasks).filter(Boolean).length;
   const progress = Math.round((completedCount / totalTasks) * 100);
+  const latestIntel = intelInjects[0];
+  const mapCenter = observerPosition || targets[0]?.position || { lat: 51.5072, lng: -0.1276 };
 
   function updateController(field, value) {
     setController((current) => ({ ...current, [field]: value }));
@@ -253,6 +365,95 @@ export default function TacpTraining({ platforms = [] }) {
       restrictions: `${situationTemplate.restrictionType} ${situationTemplate.controlMeasure}`,
     }));
     setActiveView("trainee");
+  }
+
+  function pushOpPosition() {
+    try {
+      const position = parseMgrs(opGrid);
+      setObserverPosition(position);
+      setController((current) => ({
+        ...current,
+        opTasking: `OP pushed by DS: ${formatMgrs(position)}. Confirm placement on map.`,
+      }));
+      setTargetStatus({
+        phase: "OP plotted",
+        notes: `DS pushed OP grid ${formatMgrs(position)}.`,
+      });
+      setActiveView("trainee");
+    } catch {
+      alert("Invalid OP MGRS grid.");
+    }
+  }
+
+  function pushIntelInject() {
+    const selectedInject = targetInjectTypes.find(
+      (inject) => inject.id === targetInjectType
+    );
+    const description =
+      intelText.trim() ||
+      `${selectedInject?.template || ""} ${situationTemplate.enemyActivity}`;
+
+    const inject = {
+      id: `INTEL-${Date.now()}`,
+      createdAt: getTimestamp(),
+      type: selectedInject?.label || "Intel",
+      description,
+    };
+
+    setIntelInjects((current) => [inject, ...current].slice(0, 10));
+    setController((current) => ({
+      ...current,
+      targetDevelopment: description,
+    }));
+    setTargetStatus({
+      phase: "Intel received",
+      notes: `${inject.type}: ${description}`,
+    });
+    setIntelText("");
+    setActiveView("trainee");
+  }
+
+  function pushTargetToMap() {
+    if (!targetDescription.trim()) {
+      alert("Add a target description first.");
+      return;
+    }
+
+    try {
+      const position = parseMgrs(targetGrid);
+      const targetNumber = targets.length + 1;
+      const target = {
+        id: `TGT-${String(targetNumber).padStart(3, "0")}`,
+        description: targetDescription.trim(),
+        type: targetType,
+        position,
+        mgrs: mgrs.forward([position.lng, position.lat]),
+        createdAt: new Date().toLocaleTimeString(),
+        source: "DS PUSH",
+      };
+
+      setTargets((current) => [...current, target]);
+      setController((current) => ({
+        ...current,
+        targetDevelopment: `DS pushed ${target.id}: ${target.description} at ${formatMgrs(position)}.`,
+      }));
+      setTargetStatus({
+        phase: "Target plotted",
+        notes: `DS pushed ${target.id} to the map.`,
+      });
+      setTargetDescription("");
+      setTargetGrid("");
+      setActiveView("trainee");
+    } catch {
+      alert("Invalid target MGRS grid.");
+    }
+  }
+
+  function updateTargetStatus(phase) {
+    setTargetStatus({
+      phase,
+      notes: `${phase} at ${getTimestamp()}.`,
+    });
   }
 
   function toggleTask(phaseId, taskIndex) {
@@ -353,15 +554,60 @@ export default function TacpTraining({ platforms = [] }) {
 
         <div className="card serialSnapshot">
           <h2>Target Development Window</h2>
+          <div className="dataRow">
+            <span>OP grid</span>
+            <strong>{formatMgrs(observerPosition)}</strong>
+          </div>
+
+          <label className="field">
+            OP tasking
+            <textarea value={controller.opTasking} readOnly />
+          </label>
+
           <label className="field">
             Target development tasking
             <textarea
               value={controller.targetDevelopment}
-              onChange={(event) =>
-                updateController("targetDevelopment", event.target.value)
-              }
+              readOnly
             />
           </label>
+
+          <div className="serialCard">
+            <small>Latest intel</small>
+            <p>{latestIntel?.description || "No intel inject pushed yet."}</p>
+          </div>
+
+          <div className="serialCard">
+            <small>Target development status</small>
+            <p>
+              {targetStatus.phase} - {targetStatus.notes}
+            </p>
+          </div>
+
+          <div className="targetStatusGrid">
+            {targetStatuses.map((status) => (
+              <button
+                key={status}
+                className={targetStatus.phase === status ? "activeMode" : ""}
+                onClick={() => updateTargetStatus(status)}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+
+          <div className="targetIntelList">
+            {targets.length === 0 ? (
+              <p className="emptyText">No targets plotted yet.</p>
+            ) : (
+              targets.map((target) => (
+                <div key={target.id} className="dataRow">
+                  <span>{target.id}</span>
+                  <strong>{target.description}</strong>
+                </div>
+              ))
+            )}
+          </div>
 
           <div className="serialCard">
             <small>Next actions</small>
@@ -610,6 +856,104 @@ export default function TacpTraining({ platforms = [] }) {
           </section>
 
           <section className="trainingGrid">
+            <div className="card serialControl">
+              <h2>OP / Target Push</h2>
+
+              <label className="field">
+                OP MGRS
+                <input
+                  value={opGrid}
+                  onChange={(event) => setOpGrid(event.target.value.toUpperCase())}
+                  placeholder="Example: 30U XB 12345 67890"
+                />
+              </label>
+              <button onClick={pushOpPosition}>Push OP To Troop</button>
+
+              <div className="grid compactGrid">
+                <label className="field">
+                  Target MGRS
+                  <input
+                    value={targetGrid}
+                    onChange={(event) =>
+                      setTargetGrid(event.target.value.toUpperCase())
+                    }
+                    placeholder="Target grid"
+                  />
+                </label>
+
+                <label className="field">
+                  Target type
+                  <select
+                    value={targetType}
+                    onChange={(event) => setTargetType(event.target.value)}
+                  >
+                    <option value="enemy">Enemy</option>
+                    <option value="friendly">Friendly</option>
+                    <option value="neutral">Neutral</option>
+                    <option value="unknown">Unknown</option>
+                    <option value="objective">Objective</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="field">
+                Target description
+                <input
+                  value={targetDescription}
+                  onChange={(event) => setTargetDescription(event.target.value)}
+                  placeholder="What the target is"
+                />
+              </label>
+
+              <button onClick={pushTargetToMap}>Push Target To Map</button>
+            </div>
+
+            <div className="card serialControl">
+              <h2>Intel Inject</h2>
+
+              <label className="field">
+                Inject type
+                <select
+                  value={targetInjectType}
+                  onChange={(event) => setTargetInjectType(event.target.value)}
+                >
+                  {targetInjectTypes.map((inject) => (
+                    <option key={inject.id} value={inject.id}>
+                      {inject.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                Intel for troop to plot
+                <textarea
+                  value={intelText}
+                  onChange={(event) => setIntelText(event.target.value)}
+                  placeholder="Enemy section-sized element. Grid to follow from map/intel, troop to plot and confirm."
+                />
+              </label>
+
+              <button onClick={pushIntelInject}>Push Intel To Troop</button>
+
+              <div className="targetIntelList">
+                {intelInjects.length === 0 ? (
+                  <p className="emptyText">No intel injects pushed yet.</p>
+                ) : (
+                  intelInjects.map((inject) => (
+                    <div key={inject.id} className="serialCard">
+                      <small>
+                        {inject.createdAt} / {inject.type || "Intel"}
+                      </small>
+                      <p>{inject.description}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="trainingGrid">
             <div className="card serialSnapshot">
               <h2>DS / Instructor Monitor</h2>
 
@@ -641,6 +985,18 @@ export default function TacpTraining({ platforms = [] }) {
                 <span>Progress</span>
                 <strong>{progress}%</strong>
               </div>
+              <div className="dataRow">
+                <span>OP grid</span>
+                <strong>{formatMgrs(observerPosition)}</strong>
+              </div>
+              <div className="dataRow">
+                <span>Targets plotted</span>
+                <strong>{targets.length}</strong>
+              </div>
+              <div className="dataRow">
+                <span>Target status</span>
+                <strong>{targetStatus.phase}</strong>
+              </div>
 
               <div className="serialCard">
                 <small>DS View</small>
@@ -659,6 +1015,41 @@ export default function TacpTraining({ platforms = [] }) {
                   placeholder="Effects, misses, re-attack decision, comms issues..."
                 />
               </label>
+            </div>
+
+            <div className="card mapMonitorCard">
+              <h2>Map Monitor</h2>
+              <div className="dsMapMonitor">
+                <Map
+                  defaultCenter={mapCenter}
+                  center={mapCenter}
+                  zoom={observerPosition || targets.length ? 13 : 6}
+                  mapTypeId="satellite"
+                  gestureHandling="none"
+                  disableDefaultUI={true}
+                >
+                  <TargetMarkers targets={targets} />
+                  <ObserverMarker observerPosition={observerPosition} />
+                </Map>
+              </div>
+            </div>
+          </section>
+
+          <section className="trainingGrid">
+            <div className="card serialSnapshot">
+              <h2>Aircraft Deconfliction</h2>
+              {platforms.length === 0 ? (
+                <p className="emptyText">No checked-in aircraft.</p>
+              ) : (
+                platforms.map((platform) => (
+                  <div key={platform.id} className="dataRow">
+                    <span>{platform.callsign}</span>
+                    <strong>
+                      {platform.aircraft} / {platform.positionAltitude}
+                    </strong>
+                  </div>
+                ))
+              )}
             </div>
 
         <div className="card">
