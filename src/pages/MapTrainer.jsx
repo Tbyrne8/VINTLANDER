@@ -13,6 +13,8 @@ import ObserverPanel from "../components/ObserverPanel.jsx";
 import ObserverMarker from "../components/ObserverMarker.jsx";
 import ObserverLine from "../components/ObserverLine.jsx";
 import MapContextMenu from "../components/MapContextMenu.jsx";
+import AirPlatformMarker from "../components/AirPlatformMarker.jsx";
+import AirPlatformLocator from "../components/AirPlatformLocator.jsx";
 
 const savedTargets = "vintlander.targets";
 
@@ -35,6 +37,7 @@ export default function MapTrainer({ platforms, setPlatforms }) {
   const [observerPosition, setObserverPosition] = useState(null);
   const [showObserverLine, setShowObserverLine] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
+  const [airPlatformPosition, setAirPlatformPosition] = useState(null);
 
   useEffect(() => {
     window.localStorage.setItem(savedTargets, JSON.stringify(targets));
@@ -163,16 +166,27 @@ export default function MapTrainer({ platforms, setPlatforms }) {
             position={position}
             showLine={showObserverLine}
           />
+          <AirPlatformMarker platform={airPlatformPosition} />
         </Map>
 
         <Crosshair />
+        <AirPlatformLocator
+          platform={airPlatformPosition}
+          mapCenter={position}
+          zoom={zoom}
+        />
         <MapContextMenu
           contextMenu={contextMenu}
           setContextMenu={setContextMenu}
           position={position}
           setObserverPosition={setObserverPosition}
         />
-        <IsrFeed position={position} targets={targets} platforms={platforms} />
+        <IsrFeed
+          position={position}
+          targets={targets}
+          platforms={platforms}
+          onSensorPositionChange={setAirPlatformPosition}
+        />
       </section>
     </main>
   );
