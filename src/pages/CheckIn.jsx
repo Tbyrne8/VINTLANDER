@@ -19,6 +19,16 @@ const blankCheckIn = {
 };
 
 const firstScenario = generateCheckIn("random");
+const savedPendingCheckIn = "vintlander.pendingCheckIn";
+
+function loadPendingCheckIn() {
+  try {
+    const saved = window.localStorage.getItem(savedPendingCheckIn);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+}
 
 function SerialWorkflowNav({ onNavigate }) {
   return (
@@ -45,10 +55,18 @@ export default function CheckIn({
   const [visibleLineCount, setVisibleLineCount] = useState(0);
   const [complete, setComplete] = useState(false);
   const [results, setResults] = useState(null);
-  const [guidedMode, setGuidedMode] = useState(true);
+  const [guidedMode, setGuidedMode] = useState(!serialMode);
+  const [pendingCheckIn, setPendingCheckIn] = useState(loadPendingCheckIn);
 
   const aircraftOptions = getAircraftOptions();
   const activeTransmission = scenario.transmissions[currentTransmission];
+
+  useEffect(() => {
+    if (serialMode) {
+      setGuidedMode(false);
+      setPendingCheckIn(loadPendingCheckIn());
+    }
+  }, [serialMode]);
 
   useEffect(() => {
     if (!started || complete) return;
@@ -77,7 +95,17 @@ export default function CheckIn({
   }
 
   function startCheckIn() {
-    const newScenario = generateCheckIn(selectedAircraft);
+    if (serialMode && !pendingCheckIn) {
+      alert("No aircraft has been pushed by DS for check-in yet.");
+      return;
+    }
+
+    const aircraftId = serialMode
+      ? pendingCheckIn.aircraftId
+      : selectedAircraft;
+    const newScenario = generateCheckIn(aircraftId, {
+      controllerCallsign: pendingCheckIn?.controllerCallsign,
+    });
 
     setScenario(newScenario);
     setCheckIn(blankCheckIn);
@@ -169,6 +197,11 @@ export default function CheckIn({
         ),
         newPlatform,
       ]);
+
+      if (serialMode) {
+        window.localStorage.removeItem(savedPendingCheckIn);
+        setPendingCheckIn(null);
+      }
     }
   }
 
@@ -205,6 +238,7 @@ export default function CheckIn({
           </div>
         </div>
 
+        {!serialMode && (
         <div className="modeToggle">
           <button
             className={guidedMode ? "activeMode" : ""}
@@ -220,12 +254,24 @@ export default function CheckIn({
             Assessment Mode
           </button>
         </div>
+        )}
 
         <div className="radioPanel">
           {!started && (
             <>
               <h2>RADIO CHECK-IN TRAINER</h2>
 
+              {serialMode && pendingCheckIn && (
+                <div className="serialCard checkInAlert">
+                  <small>DS pushed aircraft</small>
+                  <p>
+                    {pendingCheckIn.aircraftLabel} ready for check-in. Answer callsign{" "}
+                    {pendingCheckIn.controllerCallsign}.
+                  </p>
+                </div>
+              )}
+
+              {!serialMode && (
               <label>
                 Aircraft / Platform
                 <select
@@ -240,6 +286,7 @@ export default function CheckIn({
                   ))}
                 </select>
               </label>
+              )}
 
               <p>
                 Press start. A new aircraft check-in will be generated each
@@ -284,7 +331,9 @@ export default function CheckIn({
                   Review Transmissions
                 </button>
                 <button onClick={markCheckIn}>Mark Check-In</button>
-                <button onClick={startCheckIn}>New Check-In</button>
+                {!serialMode && (
+                  <button onClick={startCheckIn}>New Check-In</button>
+                )}
               </div>
             </>
           )}

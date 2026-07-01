@@ -17,6 +17,8 @@ const missionStorageKeys = [
   "vintlander.targetDevelopmentStatus",
   "vintlander.attackBriefs",
   "vintlander.trainingLogs",
+  "vintlander.pendingCheckIn",
+  "vintlander.attackStatus",
 ];
 
 function loadSavedPlatforms() {

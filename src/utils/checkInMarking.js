@@ -70,6 +70,7 @@ function hasAllImportantWords(userValue, correctValue) {
         "AVAILABLE",
         "ROUNDS",
         "ROUND",
+        "INTERNAL",
       ].includes(word)
   );
 
@@ -85,7 +86,7 @@ export function markCheckInField(field, userValue, correctValue) {
   }
 
   if (field === "missionNumber") {
-    return numbersOnly(user) === numbersOnly(correct);
+    return user.replace(/[^A-Z0-9]/g, "") === correct.replace(/[^A-Z0-9]/g, "");
   }
 
 if (field === "aircraftNumberType") {

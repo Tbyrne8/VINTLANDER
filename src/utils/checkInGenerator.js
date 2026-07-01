@@ -67,6 +67,21 @@ function randomNumber(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function randomLetters(length) {
+  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+  return Array.from({ length }, () => letters[randomNumber(0, letters.length - 1)]).join("");
+}
+
+function randomMissionNumber() {
+  const letterCount = randomNumber(2, 3);
+  const digitCount = randomNumber(3, 5);
+  const min = 10 ** (digitCount - 1);
+  const max = 10 ** digitCount - 1;
+
+  return `MISSION ${randomLetters(letterCount)}${randomNumber(min, max)}`;
+}
+
 function randomDownlink() {
   return String(randomNumber(1000, 9999));
 }
@@ -98,7 +113,7 @@ export function getAircraftOptions() {
   }));
 }
 
-export function generateCheckIn(selectedAircraftId = "random") {
+export function generateCheckIn(selectedAircraftId = "random", options = {}) {
   const availableAircraft = Object.keys(aircraftLibrary);
   const aircraftId =
     selectedAircraftId === "random" ? pick(availableAircraft) : selectedAircraftId;
@@ -106,7 +121,8 @@ export function generateCheckIn(selectedAircraftId = "random") {
   const aircraft = aircraftLibrary[aircraftId] || aircraftLibrary.typhoon;
 
   const callsign = `${pick(aircraft.callsigns)} ${randomNumber(11, 99)}`;
-  const missionNumber = `MISSION ${randomNumber(100, 999)}`;
+  const missionNumber = randomMissionNumber();
+  const controllerCallsign = options.controllerCallsign || "VINTAGE 10";
   const direction = pick(directions);
   const altitude = pick(aircraft.altitudeOptions);
   const playtime = pick(aircraft.playtimeOptions);
@@ -131,7 +147,7 @@ export function generateCheckIn(selectedAircraftId = "random") {
     {
       title: "TRANSMISSION 1 / 4 - AIRCRAFT",
       lines: [
-        "VINTAGE 10.",
+        `${controllerCallsign}.`,
         `THIS IS ${callsign}.`,
         `${missionNumber}.`,
         `${aircraft.numberAndType}.`,
