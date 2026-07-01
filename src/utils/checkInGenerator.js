@@ -9,7 +9,7 @@ const aircraftLibrary = {
       "2 X BRIMSTONE, 2 X PAVEWAY IV, GUN 120 ROUNDS",
     ],
     capabilities: "TGP, IR POINTER, ISR, ROVER",
-    altitudeOptions: ["ANGELS 10", "ANGELS 15", "ANGELS 20"],
+    altitudeOptions: ["10000 FT", "15000 FT", "20000 FT"],
     playtimeOptions: ["25 MINUTES", "30 MINUTES", "35 MINUTES"],
   },
 

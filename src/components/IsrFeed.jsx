@@ -338,7 +338,9 @@ export default function IsrFeed({
 
                 <div>
                   <span>ORBIT STANDOFF</span>
-                  <strong>{formatDistance(getDistanceMetres(orbitAnchor, orbitCenter))}</strong>
+                  <strong>
+                    {formatNauticalMiles(getDistanceMetres(orbitAnchor, orbitCenter))}
+                  </strong>
                 </div>
 
                 <div>
@@ -502,6 +504,10 @@ function formatDistance(distance) {
   }
 
   return `${distance.toFixed(0)} M`;
+}
+
+function formatNauticalMiles(distance) {
+  return `${(distance / 1852).toFixed(1)} NM`;
 }
 
 function formatSpeed(speedMps = 0) {
@@ -702,15 +708,27 @@ function formatPlatformAltitude(positionAltitude = "") {
     return "UNKNOWN";
   }
 
-  return altitude[0].toUpperCase().replace(/\s+/g, " ");
+  const formattedAltitude = altitude[0].toUpperCase().replace(/\s+/g, " ");
+  const angelsMatch = formattedAltitude.match(/ANGELS\s*(\d+)/);
+
+  if (angelsMatch) {
+    return `${Number(angelsMatch[1]) * 1000} FT`;
+  }
+
+  return formattedAltitude;
 }
 
 function getAltitudeProfile(positionAltitude = "") {
   const altitude = formatPlatformAltitude(positionAltitude);
   const angelsMatch = altitude.match(/ANGELS\s*(\d+)/);
   const feetMatch = altitude.match(/(\d+)\s*FT/);
+  const altitudeFeet = angelsMatch
+    ? Number(angelsMatch[1]) * 1000
+    : feetMatch
+      ? Number(feetMatch[1])
+      : 0;
 
-  if (altitude.includes("LOW LEVEL") || (feetMatch && Number(feetMatch[1]) <= 700)) {
+  if (altitude.includes("LOW LEVEL") || (altitudeFeet > 0 && altitudeFeet <= 700)) {
     return {
       label: "LOW",
       areaZoomBase: 13,
@@ -722,19 +740,7 @@ function getAltitudeProfile(positionAltitude = "") {
     };
   }
 
-  if (feetMatch) {
-    return {
-      label: "MEDIUM",
-      areaZoomBase: 12,
-      trackZoomBase: 15,
-      orbitEast: 700,
-      orbitNorth: 430,
-      radiusMultiplier: 1,
-      standoffMultiplier: 1,
-    };
-  }
-
-  if (angelsMatch && Number(angelsMatch[1]) >= 18) {
+  if (altitudeFeet > 22000) {
     return {
       label: "VERY HIGH",
       areaZoomBase: 8,
@@ -746,7 +752,7 @@ function getAltitudeProfile(positionAltitude = "") {
     };
   }
 
-  if (angelsMatch) {
+  if (altitudeFeet >= 10000) {
     return {
       label: "HIGH",
       areaZoomBase: 11,
@@ -755,6 +761,18 @@ function getAltitudeProfile(positionAltitude = "") {
       orbitNorth: 720,
       radiusMultiplier: 1.65,
       standoffMultiplier: 1.2,
+    };
+  }
+
+  if (altitudeFeet > 0) {
+    return {
+      label: "MEDIUM",
+      areaZoomBase: 12,
+      trackZoomBase: 15,
+      orbitEast: 700,
+      orbitNorth: 430,
+      radiusMultiplier: 1,
+      standoffMultiplier: 1,
     };
   }
 

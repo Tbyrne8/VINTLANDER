@@ -403,28 +403,40 @@ function formatPlatformAltitude(positionAltitude = "") {
     return "UNKNOWN";
   }
 
-  return altitude[0].toUpperCase().replace(/\s+/g, " ");
+  const formattedAltitude = altitude[0].toUpperCase().replace(/\s+/g, " ");
+  const angelsMatch = formattedAltitude.match(/ANGELS\s*(\d+)/);
+
+  if (angelsMatch) {
+    return `${Number(angelsMatch[1]) * 1000} FT`;
+  }
+
+  return formattedAltitude;
 }
 
 function getAltitudeProfile(positionAltitude = "") {
   const altitude = formatPlatformAltitude(positionAltitude);
   const angelsMatch = altitude.match(/ANGELS\s*(\d+)/);
   const feetMatch = altitude.match(/(\d+)\s*FT/);
+  const altitudeFeet = angelsMatch
+    ? Number(angelsMatch[1]) * 1000
+    : feetMatch
+      ? Number(feetMatch[1])
+      : 0;
 
-  if (altitude.includes("LOW LEVEL") || (feetMatch && Number(feetMatch[1]) <= 700)) {
+  if (altitude.includes("LOW LEVEL") || (altitudeFeet > 0 && altitudeFeet <= 700)) {
     return { orbitEast: 420, orbitNorth: 260, standoffMultiplier: 0.75 };
   }
 
-  if (feetMatch) {
-    return { orbitEast: 700, orbitNorth: 430, standoffMultiplier: 1 };
-  }
-
-  if (angelsMatch && Number(angelsMatch[1]) >= 18) {
+  if (altitudeFeet > 22000) {
     return { orbitEast: 2400, orbitNorth: 1500, standoffMultiplier: 1.45 };
   }
 
-  if (angelsMatch) {
+  if (altitudeFeet >= 10000) {
     return { orbitEast: 1150, orbitNorth: 720, standoffMultiplier: 1.2 };
+  }
+
+  if (altitudeFeet > 0) {
+    return { orbitEast: 700, orbitNorth: 430, standoffMultiplier: 1 };
   }
 
   return { orbitEast: 850, orbitNorth: 520, standoffMultiplier: 1 };
