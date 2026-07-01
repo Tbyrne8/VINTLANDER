@@ -40,7 +40,7 @@ export default function App() {
 
         {page === "home" && <Home />}
         {page === "tacp" && <TacpTraining />}
-        {page === "nine" && <NineLine />}
+        {page === "nine" && <NineLine platforms={platforms} />}
         {page === "map" && (
           <MapTrainer platforms={platforms} setPlatforms={setPlatforms} />
         )}

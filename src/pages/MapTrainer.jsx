@@ -252,7 +252,8 @@ export default function MapTrainer({ platforms, setPlatforms }) {
 function getPlatformTrack(platform, anchor, tick) {
   const altitudeProfile = getAltitudeProfile(platform.positionAltitude);
   const platformProfile = getPlatformProfile(platform.aircraft);
-  const position = getOrbitPosition(anchor, tick, altitudeProfile, platformProfile);
+  const orbitCenter = getStandoffOrbitCenter(anchor, altitudeProfile, platformProfile);
+  const position = getOrbitPosition(orbitCenter, tick, altitudeProfile, platformProfile);
 
   return {
     id: platform.id,
@@ -265,9 +266,9 @@ function getPlatformTrack(platform, anchor, tick) {
 }
 
 function getOrbitPosition(center, tick, altitudeProfile, platformProfile) {
-  const phase = tick * platformProfile.orbitSpeed;
   const eastAxis = altitudeProfile.orbitEast * platformProfile.orbitScale;
   const northAxis = altitudeProfile.orbitNorth * platformProfile.orbitScale;
+  const phase = getPathPhase(tick, eastAxis, northAxis, platformProfile);
 
   if (platformProfile.path === "uavOrbit") {
     const unrotatedEast =
@@ -342,6 +343,39 @@ function getOrbitPosition(center, tick, altitudeProfile, platformProfile) {
   );
 }
 
+function getStandoffOrbitCenter(anchor, altitudeProfile, platformProfile) {
+  const standoffMetres =
+    platformProfile.standoffMetres * altitudeProfile.standoffMultiplier;
+
+  return offsetPosition(
+    anchor,
+    ...rotateOffset(standoffMetres, standoffMetres * 0.35, platformProfile.rotation)
+  );
+}
+
+function getPathPhase(tick, eastAxis, northAxis, platformProfile) {
+  const speedMps = platformProfile.speedMps || 50;
+  const pathLength = getPathLengthMetres(eastAxis, northAxis, platformProfile);
+
+  return ((tick * speedMps) / Math.max(pathLength, 1)) * Math.PI * 2;
+}
+
+function getPathLengthMetres(eastAxis, northAxis, platformProfile) {
+  if (platformProfile.path === "fastRacetrack") {
+    return eastAxis * 4 + Math.PI * northAxis * 2;
+  }
+
+  if (platformProfile.path === "heliPatrol") {
+    return getEllipseCircumference(eastAxis * 0.55, northAxis * 0.42) * 1.25;
+  }
+
+  return getEllipseCircumference(eastAxis, northAxis);
+}
+
+function getEllipseCircumference(a, b) {
+  return Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
+}
+
 function rotateOffset(eastMetres, northMetres, rotationDegrees) {
   const rotation = toRadians(rotationDegrees);
 
@@ -378,22 +412,22 @@ function getAltitudeProfile(positionAltitude = "") {
   const feetMatch = altitude.match(/(\d+)\s*FT/);
 
   if (altitude.includes("LOW LEVEL") || (feetMatch && Number(feetMatch[1]) <= 700)) {
-    return { orbitEast: 420, orbitNorth: 260 };
+    return { orbitEast: 420, orbitNorth: 260, standoffMultiplier: 0.75 };
   }
 
   if (feetMatch) {
-    return { orbitEast: 700, orbitNorth: 430 };
+    return { orbitEast: 700, orbitNorth: 430, standoffMultiplier: 1 };
   }
 
   if (angelsMatch && Number(angelsMatch[1]) >= 18) {
-    return { orbitEast: 2400, orbitNorth: 1500 };
+    return { orbitEast: 2400, orbitNorth: 1500, standoffMultiplier: 1.45 };
   }
 
   if (angelsMatch) {
-    return { orbitEast: 1150, orbitNorth: 720 };
+    return { orbitEast: 1150, orbitNorth: 720, standoffMultiplier: 1.2 };
   }
 
-  return { orbitEast: 850, orbitNorth: 520 };
+  return { orbitEast: 850, orbitNorth: 520, standoffMultiplier: 1 };
 }
 
 function getPlatformProfile(aircraft = "") {
@@ -404,9 +438,10 @@ function getPlatformProfile(aircraft = "") {
       label: "ISR ORBIT",
       path: "uavOrbit",
       orbitScale: 4.8,
-      orbitSpeed: 0.00055,
+      speedMps: 46,
       rotation: 32,
       drift: 520,
+      standoffMetres: 5200,
     };
   }
 
@@ -415,9 +450,10 @@ function getPlatformProfile(aircraft = "") {
       label: "HELI PATROL",
       path: "heliPatrol",
       orbitScale: 1.25,
-      orbitSpeed: 0.0065,
+      speedMps: 35,
       rotation: 18,
       drift: 90,
+      standoffMetres: 1200,
     };
   }
 
@@ -426,9 +462,10 @@ function getPlatformProfile(aircraft = "") {
       label: "HIGH RACETRACK",
       path: "fastRacetrack",
       orbitScale: 5.6,
-      orbitSpeed: 0.0045,
+      speedMps: 185,
       rotation: 42,
       drift: 0,
+      standoffMetres: 12500,
     };
   }
 
@@ -437,9 +474,10 @@ function getPlatformProfile(aircraft = "") {
       label: "FAST RACETRACK",
       path: "fastRacetrack",
       orbitScale: 4.8,
-      orbitSpeed: 0.0055,
+      speedMps: 205,
       rotation: 38,
       drift: 0,
+      standoffMetres: 9500,
     };
   }
 
@@ -447,9 +485,10 @@ function getPlatformProfile(aircraft = "") {
     label: "RACETRACK",
     path: "fastRacetrack",
     orbitScale: 3.6,
-    orbitSpeed: 0.005,
+    speedMps: 180,
     rotation: 36,
     drift: 0,
+    standoffMetres: 8000,
   };
 }
 

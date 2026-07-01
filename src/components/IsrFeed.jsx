@@ -32,11 +32,15 @@ export default function IsrFeed({
     () => getPlatformProfile(unlockedPlatform?.aircraft),
     [unlockedPlatform?.aircraft]
   );
+  const orbitCenter = useMemo(
+    () => getStandoffOrbitCenter(orbitAnchor, altitudeProfile, platformProfile),
+    [altitudeProfile, orbitAnchor, platformProfile]
+  );
   const activeTarget = targets.find((target) => target.id === activeTargetId);
   const aircraftPosition = useMemo(
     () =>
-      getOrbitPosition(orbitAnchor, feedTick, altitudeProfile, platformProfile),
-    [altitudeProfile, feedTick, orbitAnchor, platformProfile]
+      getOrbitPosition(orbitCenter, feedTick, altitudeProfile, platformProfile),
+    [altitudeProfile, feedTick, orbitCenter, platformProfile]
   );
   const feedCenter = useMemo(
     () => (activeTarget ? activeTarget.position : aircraftPosition),
@@ -134,7 +138,7 @@ export default function IsrFeed({
       const elapsed = Math.min(48, frameTime - lastFrameTime);
       lastFrameTime = frameTime;
 
-      setFeedTick((currentTick) => currentTick + elapsed / 80);
+      setFeedTick((currentTick) => currentTick + elapsed / 1000);
       animationFrameId = window.requestAnimationFrame(animateFrame);
     }
 
@@ -234,7 +238,7 @@ export default function IsrFeed({
                 <div
                   className="vdlLiveMap"
                   style={{
-                    transform: `rotate(${-feedHeading}deg) scale(1.42)`,
+                    transform: `perspective(760px) rotateX(18deg) rotate(${-feedHeading}deg) scale(1.64)`,
                   }}
                 >
                   <Map
@@ -271,6 +275,7 @@ export default function IsrFeed({
                     </div>
                   )}
                 </div>
+                <div className="vdlObliqueShade"></div>
                 <div className="vdlReticle"></div>
                 <div className="vdlScanline"></div>
                 <div className="vdlModeTag">{sensorMode}</div>
@@ -332,6 +337,11 @@ export default function IsrFeed({
                 </div>
 
                 <div>
+                  <span>ORBIT STANDOFF</span>
+                  <strong>{formatDistance(getDistanceMetres(orbitAnchor, orbitCenter))}</strong>
+                </div>
+
+                <div>
                   <span>SENSOR POINT</span>
                   <strong>{feedMode}</strong>
                 </div>
@@ -371,6 +381,11 @@ export default function IsrFeed({
                 <div>
                   <span>ORBIT</span>
                   <strong>{platformProfile.label}</strong>
+                </div>
+
+                <div>
+                  <span>SIM SPEED</span>
+                  <strong>{formatSpeed(platformProfile.speedMps)}</strong>
                 </div>
 
                 <div>
@@ -489,6 +504,12 @@ function formatDistance(distance) {
   return `${distance.toFixed(0)} M`;
 }
 
+function formatSpeed(speedMps = 0) {
+  const knots = speedMps * 1.94384;
+
+  return `${knots.toFixed(0)} KT`;
+}
+
 function formatTrackAge(seconds) {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -517,13 +538,13 @@ function getTrackQuality(zoomLevel, trackAgeSeconds) {
 function getMovementHeading(center, tick, altitudeProfile, platformProfile) {
   const previousPosition = getOrbitPosition(
     center,
-    Math.max(0, tick - 8),
+    Math.max(0, tick - 4),
     altitudeProfile,
     platformProfile
   );
   const nextPosition = getOrbitPosition(
     center,
-    tick + 8,
+    tick + 4,
     altitudeProfile,
     platformProfile
   );
@@ -544,9 +565,9 @@ function getBearingDegrees(from, to) {
 }
 
 function getOrbitPosition(center, tick, altitudeProfile, platformProfile) {
-  const phase = tick * platformProfile.orbitSpeed;
   const eastAxis = altitudeProfile.orbitEast * platformProfile.orbitScale;
   const northAxis = altitudeProfile.orbitNorth * platformProfile.orbitScale;
+  const phase = getPathPhase(tick, eastAxis, northAxis, platformProfile);
 
   if (platformProfile.path === "uavOrbit") {
     const unrotatedEast =
@@ -621,6 +642,39 @@ function getOrbitPosition(center, tick, altitudeProfile, platformProfile) {
   );
 }
 
+function getStandoffOrbitCenter(anchor, altitudeProfile, platformProfile) {
+  const standoffMetres =
+    platformProfile.standoffMetres * altitudeProfile.standoffMultiplier;
+
+  return offsetPosition(
+    anchor,
+    ...rotateOffset(standoffMetres, standoffMetres * 0.35, platformProfile.rotation)
+  );
+}
+
+function getPathPhase(tick, eastAxis, northAxis, platformProfile) {
+  const speedMps = platformProfile.speedMps || 50;
+  const pathLength = getPathLengthMetres(eastAxis, northAxis, platformProfile);
+
+  return ((tick * speedMps) / Math.max(pathLength, 1)) * Math.PI * 2;
+}
+
+function getPathLengthMetres(eastAxis, northAxis, platformProfile) {
+  if (platformProfile.path === "fastRacetrack") {
+    return eastAxis * 4 + Math.PI * northAxis * 2;
+  }
+
+  if (platformProfile.path === "heliPatrol") {
+    return getEllipseCircumference(eastAxis * 0.55, northAxis * 0.42) * 1.25;
+  }
+
+  return getEllipseCircumference(eastAxis, northAxis);
+}
+
+function getEllipseCircumference(a, b) {
+  return Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
+}
+
 function rotateOffset(eastMetres, northMetres, rotationDegrees) {
   const rotation = toRadians(rotationDegrees);
 
@@ -664,6 +718,7 @@ function getAltitudeProfile(positionAltitude = "") {
       orbitEast: 420,
       orbitNorth: 260,
       radiusMultiplier: 0.75,
+      standoffMultiplier: 0.75,
     };
   }
 
@@ -675,6 +730,7 @@ function getAltitudeProfile(positionAltitude = "") {
       orbitEast: 700,
       orbitNorth: 430,
       radiusMultiplier: 1,
+      standoffMultiplier: 1,
     };
   }
 
@@ -686,6 +742,7 @@ function getAltitudeProfile(positionAltitude = "") {
       orbitEast: 2400,
       orbitNorth: 1500,
       radiusMultiplier: 4.2,
+      standoffMultiplier: 1.45,
     };
   }
 
@@ -697,6 +754,7 @@ function getAltitudeProfile(positionAltitude = "") {
       orbitEast: 1150,
       orbitNorth: 720,
       radiusMultiplier: 1.65,
+      standoffMultiplier: 1.2,
     };
   }
 
@@ -707,6 +765,7 @@ function getAltitudeProfile(positionAltitude = "") {
     orbitEast: 850,
     orbitNorth: 520,
     radiusMultiplier: 1.2,
+    standoffMultiplier: 1,
   };
 }
 
@@ -718,9 +777,10 @@ function getPlatformProfile(aircraft = "") {
       label: "ISR ORBIT",
       path: "uavOrbit",
       orbitScale: 4.8,
-      orbitSpeed: 0.00055,
+      speedMps: 46,
       rotation: 32,
       drift: 520,
+      standoffMetres: 5200,
     };
   }
 
@@ -729,9 +789,10 @@ function getPlatformProfile(aircraft = "") {
       label: "HELI PATROL",
       path: "heliPatrol",
       orbitScale: 1.25,
-      orbitSpeed: 0.0065,
+      speedMps: 35,
       rotation: 18,
       drift: 90,
+      standoffMetres: 1200,
     };
   }
 
@@ -740,9 +801,10 @@ function getPlatformProfile(aircraft = "") {
       label: "HIGH RACETRACK",
       path: "fastRacetrack",
       orbitScale: 5.6,
-      orbitSpeed: 0.0045,
+      speedMps: 185,
       rotation: 42,
       drift: 0,
+      standoffMetres: 12500,
     };
   }
 
@@ -751,9 +813,10 @@ function getPlatformProfile(aircraft = "") {
       label: "FAST RACETRACK",
       path: "fastRacetrack",
       orbitScale: 4.8,
-      orbitSpeed: 0.0055,
+      speedMps: 205,
       rotation: 38,
       drift: 0,
+      standoffMetres: 9500,
     };
   }
 
@@ -761,9 +824,10 @@ function getPlatformProfile(aircraft = "") {
     label: "RACETRACK",
     path: "fastRacetrack",
     orbitScale: 3.6,
-    orbitSpeed: 0.005,
+    speedMps: 180,
     rotation: 36,
     drift: 0,
+    standoffMetres: 8000,
   };
 }
 
