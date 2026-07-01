@@ -86,7 +86,10 @@ textarea {
 
   .briefGrid,
   .briefActions,
-  .compactGrid {
+  .compactGrid,
+  .trainingGrid,
+  .phaseGrid,
+  .readinessStrip {
     grid-template-columns: 1fr;
   }
 }
@@ -415,6 +418,147 @@ select {
 .savedBrief span {
   color: #c5d0c5;
   margin-top: 3px;
+}
+
+.trainingGrid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.trainingTabs {
+  display: inline-flex;
+  gap: 6px;
+  padding: 6px;
+  margin-bottom: 14px;
+  border: 1px solid #3f563f;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.trainingTabs button {
+  min-width: 140px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: transparent;
+  color: #dfe8d6;
+}
+
+.trainingTabs button.active {
+  border-color: #f5c542;
+  background: rgba(245, 197, 66, 0.12);
+  color: #f5c542;
+}
+
+.serialControl h2,
+.serialSnapshot h2,
+.phaseBoard h2,
+.trainingLog h2 {
+  margin-top: 0;
+  color: #f5c542;
+}
+
+.readinessStrip {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.readinessStrip span {
+  border: 1px solid #5b4030;
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+  color: #ffb4a0;
+  background: rgba(130, 50, 35, 0.18);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.readinessStrip span.ready {
+  border-color: #00ff66;
+  color: #00ff66;
+  background: rgba(0, 255, 102, 0.08);
+}
+
+.serialCard {
+  border: 1px solid #3f563f;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 14px 0;
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.serialCard small {
+  display: block;
+  color: #f5c542;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.serialCard p {
+  margin: 0;
+  color: #f4f7ec;
+  line-height: 1.45;
+}
+
+.callsignAddRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.callsignAddRow button {
+  min-height: 40px;
+}
+
+.phaseBoard {
+  margin-top: 14px;
+}
+
+.phaseGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.phaseCard {
+  border: 1px solid #3f563f;
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.phaseCard.done {
+  border-color: #00ff66;
+  background: rgba(0, 255, 102, 0.06);
+}
+
+.phaseCard h3 {
+  min-height: 38px;
+  margin: 0 0 10px;
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.taskCheck {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 8px;
+  align-items: start;
+  margin: 9px 0;
+  color: #dfe8d6;
+  line-height: 1.35;
+}
+
+.taskCheck input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
 }
 .targetItem {
   display: grid;

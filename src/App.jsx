@@ -39,7 +39,7 @@ export default function App() {
         </nav>
 
         {page === "home" && <Home />}
-        {page === "tacp" && <TacpTraining />}
+        {page === "tacp" && <TacpTraining platforms={platforms} />}
         {page === "nine" && <NineLine platforms={platforms} />}
         {page === "map" && (
           <MapTrainer platforms={platforms} setPlatforms={setPlatforms} />
