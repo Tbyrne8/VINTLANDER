@@ -20,7 +20,23 @@ const blankCheckIn = {
 
 const firstScenario = generateCheckIn("random");
 
-export default function CheckIn({ platforms, setPlatforms }) {
+function SerialWorkflowNav({ onNavigate }) {
+  return (
+    <section className="missionLauncher serialWorkflowRow">
+      <button onClick={() => onNavigate("tacp")}>Mission</button>
+      <button onClick={() => onNavigate("checkin")}>Check-In</button>
+      <button onClick={() => onNavigate("map")}>Map / OP</button>
+      <button onClick={() => onNavigate("nine")}>Build 9-Line</button>
+    </section>
+  );
+}
+
+export default function CheckIn({
+  platforms,
+  setPlatforms,
+  onNavigate = () => {},
+  serialMode = false,
+}) {
   const [selectedAircraft, setSelectedAircraft] = useState("random");
   const [scenario, setScenario] = useState(firstScenario);
   const [checkIn, setCheckIn] = useState(blankCheckIn);
@@ -141,6 +157,7 @@ export default function CheckIn({ platforms, setPlatforms }) {
         aircraft: scenario.correctCheckIn.aircraftNumberType,
         positionAltitude: scenario.correctCheckIn.positionAltitude,
         playtime: scenario.correctCheckIn.playtime,
+        checkedInAt: new Date().toISOString(),
         downlinkCode: scenario.correctCheckIn.downlinkCode,
         capabilities: scenario.correctCheckIn.capabilities,
         status: "CHECKED IN",
@@ -163,6 +180,14 @@ export default function CheckIn({ platforms, setPlatforms }) {
 
   return (
     <main className="kneeboardPage">
+      <div className="pageBackRow">
+        {serialMode ? (
+          <SerialWorkflowNav onNavigate={onNavigate} />
+        ) : (
+          <button onClick={() => onNavigate("home")}>Home</button>
+        )}
+      </div>
+
       <section className="kneeboardCard">
         <div className="kneeboardHeader">
           <div>

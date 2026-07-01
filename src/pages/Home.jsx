@@ -1,24 +1,40 @@
-export default function Home() {
+export default function Home({ onNavigate, onStartSerial }) {
   return (
     <main className="page">
       <h1>VINTAGE JTAC Trainer</h1>
       <p>Build individual skills, then combine them into full mission training.</p>
 
-      <div className="grid">
-        <div className="card">
-          <h2>Training Centre</h2>
-          <p>Practise check-ins, map reading, 9-lines, ISR and target work as standalone drills.</p>
+      <section className="homeHero card">
+        <div>
+          <h2>Full Mission Serial</h2>
+          <p>
+            Run the immersive DS-led exercise flow from situation update through
+            check-in, OP placement, target development, 9-line and BDA.
+          </p>
         </div>
+        <button onClick={onStartSerial}>Start Full Serial</button>
+      </section>
 
-        <div className="card">
-          <h2>Mission Workstation</h2>
-          <p>Run a full CAS serial with check-in, air picture, targets, ISR, 9-line and BDA.</p>
-        </div>
+      <div className="grid homeLauncherGrid">
+        <button className="launcherCard" onClick={() => onNavigate("checkin")}>
+          <strong>Check-In</strong>
+          <span>Aircraft check-in and platform management.</span>
+        </button>
 
-        <div className="card">
-          <h2>Training Record</h2>
-          <p>Scores, attempts, weak areas and progress tracking. Coming later.</p>
-        </div>
+        <button className="launcherCard" onClick={() => onNavigate("map")}>
+          <strong>Map Trainer</strong>
+          <span>OPs, targets, grids, air picture and ISR feed.</span>
+        </button>
+
+        <button className="launcherCard" onClick={() => onNavigate("nine")}>
+          <strong>9-Line / TACAM</strong>
+          <span>Build and save attack briefs as a standalone drill.</span>
+        </button>
+
+        <button className="launcherCard" onClick={() => onNavigate("tacp")}>
+          <strong>TACP Training</strong>
+          <span>Open the mission trainer without full-screen serial mode.</span>
+        </button>
       </div>
     </main>
   );

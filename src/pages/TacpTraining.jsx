@@ -214,12 +214,57 @@ function formatMgrs(position) {
     .replace(/^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/, "$1 $2 $3 $4");
 }
 
+function formatPlatformAltitude(positionAltitude = "") {
+  return positionAltitude.replace(/ANGELS\s*(\d+)/gi, (_, angels) => {
+    return `${Number(angels) * 1000} FT`;
+  });
+}
+
+function getPlaytimeMinutes(playtime = "") {
+  const hoursMatch = playtime.match(/(\d+)\s*HOURS?/i);
+  const minutesMatch = playtime.match(/(\d+)\s*MINUTES?/i);
+
+  if (hoursMatch) return Number(hoursMatch[1]) * 60;
+  if (minutesMatch) return Number(minutesMatch[1]);
+  return null;
+}
+
+function formatPlaytime(platform) {
+  const totalMinutes = getPlaytimeMinutes(platform.playtime);
+
+  if (!platform.checkedInAt || totalMinutes === null) {
+    return platform.playtime || "UNKNOWN";
+  }
+
+  const elapsedMinutes = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(platform.checkedInAt).getTime()) / 60000)
+  );
+  const remainingMinutes = Math.max(0, totalMinutes - elapsedMinutes);
+
+  return `${remainingMinutes} MIN REM / ${platform.playtime}`;
+}
+
+function formatCheckInTime(checkedInAt) {
+  if (!checkedInAt) return "UNKNOWN";
+
+  return new Date(checkedInAt).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function parseMgrs(value) {
   const [lng, lat] = mgrs.toPoint(value.replace(/\s+/g, "").trim());
   return { lat, lng };
 }
 
-export default function TacpTraining({ platforms = [] }) {
+export default function TacpTraining({
+  platforms = [],
+  onNavigate = () => {},
+  serialMode = false,
+  onExitSerial = () => {},
+}) {
   const [logs, setLogs] = useState(() => loadSavedList(savedTrainingLogs));
   const [targets, setTargets] = useState(() => loadSavedList(savedTargets));
   const [observerPosition, setObserverPosition] = useState(() =>
@@ -492,10 +537,23 @@ export default function TacpTraining({ platforms = [] }) {
           <h1>TACP Mission Trainer</h1>
           <p>Run a complete serial from aircraft check-in through effects and BDA.</p>
         </div>
-        <span className={progress === 100 ? "statusPill ready" : "statusPill"}>
-          SERIAL {progress}% COMPLETE
-        </span>
+        <div className="headerActions">
+          <span className={progress === 100 ? "statusPill ready" : "statusPill"}>
+            SERIAL {progress}% COMPLETE
+          </span>
+          {serialMode && (
+            <button onClick={onExitSerial}>Exit To Main Menu</button>
+          )}
+        </div>
       </header>
+
+      {serialMode && (
+        <section className="missionLauncher">
+          <button onClick={() => onNavigate("checkin")}>Check-In</button>
+          <button onClick={() => onNavigate("map")}>Map / OP</button>
+          <button onClick={() => onNavigate("nine")}>Build 9-Line</button>
+        </section>
+      )}
 
       <div className="trainingTabs" role="tablist" aria-label="Training views">
         <button
@@ -509,6 +567,12 @@ export default function TacpTraining({ platforms = [] }) {
           onClick={() => setActiveView("instructor")}
         >
           DS / Instructor
+        </button>
+        <button
+          className={activeView === "platforms" ? "active" : ""}
+          onClick={() => setActiveView("platforms")}
+        >
+          Live Aircraft
         </button>
       </div>
 
@@ -1093,6 +1157,47 @@ export default function TacpTraining({ platforms = [] }) {
           )}
       </section>
         </>
+      )}
+
+      {activeView === "platforms" && (
+        <section className="card platformTableCard">
+          <h2>Live Aircraft / Check-In Details</h2>
+
+          {platforms.length === 0 ? (
+            <p className="emptyText">No aircraft checked in yet.</p>
+          ) : (
+            <div className="platformTableWrap">
+              <table className="platformTable">
+                <thead>
+                  <tr>
+                    <th>Callsign</th>
+                    <th>Aircraft</th>
+                    <th>Position / Altitude</th>
+                    <th>Playtime Remaining</th>
+                    <th>Checked In</th>
+                    <th>Downlink</th>
+                    <th>Capabilities</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {platforms.map((platform) => (
+                    <tr key={platform.id}>
+                      <td>{platform.callsign}</td>
+                      <td>{platform.aircraft}</td>
+                      <td>{formatPlatformAltitude(platform.positionAltitude)}</td>
+                      <td>{formatPlaytime(platform)}</td>
+                      <td>{formatCheckInTime(platform.checkedInAt)}</td>
+                      <td>{platform.downlinkCode}</td>
+                      <td>{platform.capabilities}</td>
+                      <td>{platform.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       )}
     </main>
   );

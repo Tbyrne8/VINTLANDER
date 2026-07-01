@@ -3,6 +3,17 @@ import { useEffect, useMemo, useState } from "react";
 const savedTargets = "vintlander.targets";
 const savedBriefs = "vintlander.attackBriefs";
 
+function SerialWorkflowNav({ onNavigate }) {
+  return (
+    <section className="missionLauncher serialWorkflowRow">
+      <button onClick={() => onNavigate("tacp")}>Mission</button>
+      <button onClick={() => onNavigate("checkin")}>Check-In</button>
+      <button onClick={() => onNavigate("map")}>Map / OP</button>
+      <button onClick={() => onNavigate("nine")}>Build 9-Line</button>
+    </section>
+  );
+}
+
 const defaultBrief = {
   ipBp: "CURRENT HOLD",
   heading: "AS REQUIRED",
@@ -77,7 +88,11 @@ function formatBriefText(platform, target, brief, lines) {
   ].join("\n");
 }
 
-export default function NineLine({ platforms = [] }) {
+export default function NineLine({
+  platforms = [],
+  onNavigate = () => {},
+  serialMode = false,
+}) {
   const [targets, setTargets] = useState(() => loadSavedList(savedTargets));
   const [briefs, setBriefs] = useState(() => loadSavedList(savedBriefs));
   const [selectedPlatformId, setSelectedPlatformId] = useState("");
@@ -160,6 +175,14 @@ export default function NineLine({ platforms = [] }) {
 
   return (
     <main className="page nineLinePage">
+      <div className="pageBackRow">
+        {serialMode ? (
+          <SerialWorkflowNav onNavigate={onNavigate} />
+        ) : (
+          <button onClick={() => onNavigate("home")}>Home</button>
+        )}
+      </div>
+
       <header className="pageHeader">
         <div>
           <h1>9-Line / TACAM Trainer</h1>

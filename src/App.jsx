@@ -21,31 +21,83 @@ function loadSavedPlatforms() {
 
 export default function App() {
   const [page, setPage] = useState("home");
+  const [serialMode, setSerialMode] = useState(false);
   const [platforms, setPlatforms] = useState(loadSavedPlatforms);
 
   useEffect(() => {
     window.localStorage.setItem(savedPlatforms, JSON.stringify(platforms));
   }, [platforms]);
 
+  function goToPage(nextPage) {
+    setPage(nextPage);
+  }
+
+  function startFullSerial() {
+    setSerialMode(true);
+    setPage("tacp");
+  }
+
+  function exitSerial() {
+    setSerialMode(false);
+    setPage("home");
+  }
+
   return (
     <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
-      <div className="app">
-        <nav className="nav">
-          <button onClick={() => setPage("home")}>Home</button>
-          <button onClick={() => setPage("tacp")}>TACP Training</button>
-          <button onClick={() => setPage("nine")}>9-Line / TACAM</button>
-          <button onClick={() => setPage("map")}>Map Trainer</button>
-          <button onClick={() => setPage("checkin")}>Check-In</button>
-        </nav>
+      <div className={`app ${serialMode ? "serialMode" : ""}`}>
+        {!serialMode && (
+          <nav className="nav">
+            <button onClick={() => goToPage("home")}>Home</button>
+            <button onClick={() => goToPage("tacp")}>TACP Training</button>
+            <button onClick={() => goToPage("nine")}>9-Line / TACAM</button>
+            <button onClick={() => goToPage("map")}>Map Trainer</button>
+            <button onClick={() => goToPage("checkin")}>Check-In</button>
+          </nav>
+        )}
 
-        {page === "home" && <Home />}
-        {page === "tacp" && <TacpTraining platforms={platforms} />}
-        {page === "nine" && <NineLine platforms={platforms} />}
+        {serialMode && page !== "tacp" && (
+          <div className="serialBar">
+            <strong>FULL SERIAL</strong>
+            <div>
+              <button onClick={() => goToPage("tacp")}>Return To Mission</button>
+              <button onClick={exitSerial}>Exit To Main Menu</button>
+            </div>
+          </div>
+        )}
+
+        {page === "home" && (
+          <Home onNavigate={goToPage} onStartSerial={startFullSerial} />
+        )}
+        {page === "tacp" && (
+          <TacpTraining
+            platforms={platforms}
+            onNavigate={goToPage}
+            serialMode={serialMode}
+            onExitSerial={exitSerial}
+          />
+        )}
+        {page === "nine" && (
+          <NineLine
+            platforms={platforms}
+            onNavigate={goToPage}
+            serialMode={serialMode}
+          />
+        )}
         {page === "map" && (
-          <MapTrainer platforms={platforms} setPlatforms={setPlatforms} />
+          <MapTrainer
+            platforms={platforms}
+            setPlatforms={setPlatforms}
+            onNavigate={goToPage}
+            serialMode={serialMode}
+          />
         )}
         {page === "checkin" && (
-          <CheckIn platforms={platforms} setPlatforms={setPlatforms} />
+          <CheckIn
+            platforms={platforms}
+            setPlatforms={setPlatforms}
+            onNavigate={goToPage}
+            serialMode={serialMode}
+          />
         )}
       </div>
     </APIProvider>

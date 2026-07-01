@@ -19,6 +19,17 @@ import AirPlatformLocator from "../components/AirPlatformLocator.jsx";
 const savedTargets = "vintlander.targets";
 const savedObserverPosition = "vintlander.observerPosition";
 
+function SerialWorkflowNav({ onNavigate }) {
+  return (
+    <section className="missionLauncher serialWorkflowRow">
+      <button onClick={() => onNavigate("tacp")}>Mission</button>
+      <button onClick={() => onNavigate("checkin")}>Check-In</button>
+      <button onClick={() => onNavigate("map")}>Map / OP</button>
+      <button onClick={() => onNavigate("nine")}>Build 9-Line</button>
+    </section>
+  );
+}
+
 function loadSavedTargets() {
   try {
     const saved = window.localStorage.getItem(savedTargets);
@@ -37,7 +48,12 @@ function loadSavedObserverPosition() {
   }
 }
 
-export default function MapTrainer({ platforms, setPlatforms }) {
+export default function MapTrainer({
+  platforms,
+  setPlatforms,
+  onNavigate = () => {},
+  serialMode = false,
+}) {
   const [mgrsInput, setMgrsInput] = useState("");
   const [position, setPosition] = useState({ lat: 51.5072, lng: -0.1276 });
   const [mapType, setMapType] = useState("satellite");
@@ -127,6 +143,14 @@ export default function MapTrainer({ platforms, setPlatforms }) {
   return (
     <main className="mapPage">
       <section className="mapControls">
+        <div className="pageBackRow compactBackRow">
+          {serialMode ? (
+            <SerialWorkflowNav onNavigate={onNavigate} />
+          ) : (
+            <button onClick={() => onNavigate("home")}>Home</button>
+          )}
+        </div>
+
         <h1>Mission Panel</h1>
 
         <button className="clearMission" onClick={clearMission}>

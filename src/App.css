@@ -14,6 +14,10 @@ textarea {
   min-height: 100vh;
 }
 
+.serialMode {
+  min-height: 100vh;
+}
+
 .nav {
   display: flex;
   gap: 8px;
@@ -32,10 +36,70 @@ textarea {
   cursor: pointer;
 }
 
+.serialBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #141d14;
+  border-bottom: 1px solid #3f563f;
+}
+
+.serialBar strong {
+  color: #f5c542;
+}
+
+.serialBar div {
+  display: flex;
+  gap: 8px;
+}
+
+.serialMode .trainingPage {
+  max-width: none;
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.serialMode .mapPage {
+  height: calc(100vh - 54px);
+}
+
+.serialMode .mapControls,
+.serialMode .mapBox {
+  height: calc(100vh - 54px);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .page {
   padding: 20px;
   max-width: 1000px;
   margin: auto;
+}
+
+.pageBackRow {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+
+.pageBackRow button {
+  border: 1px solid #4c634c;
+  border-radius: 8px;
+  background: #263626;
+  color: #ffffff;
+  padding: 9px 12px;
+}
+
+.compactBackRow {
+  margin-bottom: 8px;
 }
 
 .grid {
@@ -50,6 +114,54 @@ textarea {
   padding: 16px;
   border-radius: 12px;
   margin: 12px 0;
+}
+
+.homeHero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.homeHero h2 {
+  margin-top: 0;
+  color: #f5c542;
+}
+
+.homeHero p {
+  margin-bottom: 0;
+  color: #c5d0c5;
+}
+
+.homeHero button {
+  min-height: 48px;
+  min-width: 170px;
+}
+
+.homeLauncherGrid {
+  align-items: stretch;
+}
+
+.launcherCard {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  background: #1d281d;
+  border: 1px solid #3f563f;
+  color: #ffffff;
+  padding: 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.launcherCard strong {
+  color: #f5c542;
+  font-size: 1.05rem;
+}
+
+.launcherCard span {
+  color: #c5d0c5;
+  line-height: 1.35;
 }
 
 .field {
@@ -79,9 +191,17 @@ textarea {
   }
 
   .pageHeader,
-  .savedBrief {
+  .savedBrief,
+  .homeHero,
+  .serialBar {
     grid-template-columns: 1fr;
     flex-direction: column;
+  }
+
+  .serialBar,
+  .serialBar div,
+  .headerActions {
+    align-items: stretch;
   }
 
   .briefGrid,
@@ -90,7 +210,8 @@ textarea {
   .trainingGrid,
   .phaseGrid,
   .readinessStrip,
-  .targetStatusGrid {
+  .targetStatusGrid,
+  .missionLauncher {
     grid-template-columns: 1fr;
   }
 }
@@ -453,12 +574,60 @@ select {
   color: #f5c542;
 }
 
+.missionLauncher {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.serialWorkflowRow {
+  margin-bottom: 12px;
+}
+
+.missionLauncher button {
+  min-height: 46px;
+  border: 1px solid #4c634c;
+  border-radius: 8px;
+  background: #263626;
+  color: #ffffff;
+  font-weight: 700;
+}
+
 .serialControl h2,
 .serialSnapshot h2,
 .phaseBoard h2,
-.trainingLog h2 {
+.trainingLog h2,
+.platformTableCard h2 {
   margin-top: 0;
   color: #f5c542;
+}
+
+.platformTableWrap {
+  overflow-x: auto;
+}
+
+.platformTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.platformTable th,
+.platformTable td {
+  border-bottom: 1px solid #3f563f;
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.platformTable th {
+  color: #f5c542;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.platformTable td {
+  color: #eef4e5;
 }
 
 .readinessStrip {
