@@ -225,6 +225,21 @@ select {
   font-size: 10px;
   font-weight: 800;
 }
+
+.airPlatformLocator.allPlatformLocator {
+  z-index: 9;
+  border-color: #00ff66;
+  background: rgba(7, 17, 8, 0.82);
+}
+
+.airPlatformLocator.allPlatformLocator strong {
+  color: #ffffff;
+}
+
+.airPlatformLocator.allPlatformLocator .airPlatformArrow {
+  color: #00ff66;
+  text-shadow: 0 0 10px rgba(0, 255, 102, 0.7);
+}
 .hiddenButton {
   display: none;
 }
@@ -280,6 +295,19 @@ select {
   margin-bottom: 12px;
   background: #5a1f1f;
   border: 1px solid #8b3535;
+}
+
+.airPictureToggle {
+  width: 100%;
+  margin-bottom: 10px;
+  border: 1px solid #4c634c;
+  background: #263526;
+}
+
+.airPictureToggle.activeMode {
+  border-color: #f5c542;
+  background: rgba(245, 197, 66, 0.15);
+  color: #f5c542;
 }
 .vdlWindow {
   position: absolute;

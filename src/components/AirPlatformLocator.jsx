@@ -1,17 +1,31 @@
-export default function AirPlatformLocator({ platform, mapCenter, zoom }) {
+export default function AirPlatformLocator({
+  platform,
+  mapCenter,
+  zoom,
+  alwaysVisible = false,
+  index = 0,
+}) {
   if (!platform?.position || !mapCenter) return null;
 
   const offset = getOffsetMetres(mapCenter, platform.position);
   const range = Math.hypot(offset.eastMetres, offset.northMetres);
   const bearing = getBearingDegrees(offset.eastMetres, offset.northMetres);
   const viewRadius = getApproxViewRadiusMetres(zoom);
+
+  if (range < viewRadius * 0.82) {
+    return null;
+  }
+
   const scale = Math.min(1, range / viewRadius);
-  const left = 50 + (offset.eastMetres / Math.max(range, 1)) * scale * 42;
-  const top = 50 - (offset.northMetres / Math.max(range, 1)) * scale * 42;
+  const tagOffset = alwaysVisible ? index * 3 : 0;
+  const left =
+    50 + (offset.eastMetres / Math.max(range, 1)) * scale * 42 + tagOffset;
+  const top =
+    50 - (offset.northMetres / Math.max(range, 1)) * scale * 42 + tagOffset;
 
   return (
     <div
-      className="airPlatformLocator"
+      className={`airPlatformLocator ${alwaysVisible ? "allPlatformLocator" : ""}`}
       style={{
         left: `${clamp(left, 8, 92)}%`,
         top: `${clamp(top, 10, 90)}%`,
@@ -24,7 +38,7 @@ export default function AirPlatformLocator({ platform, mapCenter, zoom }) {
         className="airPlatformArrow"
         style={{ transform: `rotate(${bearing}deg)` }}
       >
-        ▲
+        ^
       </span>
       <strong>{platform.callsign}</strong>
       <small>

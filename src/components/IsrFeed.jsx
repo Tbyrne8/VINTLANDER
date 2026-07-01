@@ -15,9 +15,10 @@ export default function IsrFeed({
   const [zoomLevel, setZoomLevel] = useState(2);
   const [activeTargetId, setActiveTargetId] = useState(null);
   const [feedTick, setFeedTick] = useState(0);
+  const [orbitAnchor, setOrbitAnchor] = useState(position);
 
   const currentMgrs = mgrs
-    .forward([position.lng, position.lat])
+    .forward([orbitAnchor.lng, orbitAnchor.lat])
     .replace(/^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/, "$1 $2 $3 $4");
 
   const altitudeProfile = useMemo(
@@ -31,8 +32,8 @@ export default function IsrFeed({
   const activeTarget = targets.find((target) => target.id === activeTargetId);
   const aircraftPosition = useMemo(
     () =>
-      getOrbitPosition(position, feedTick, altitudeProfile, platformProfile),
-    [altitudeProfile, feedTick, platformProfile, position]
+      getOrbitPosition(orbitAnchor, feedTick, altitudeProfile, platformProfile),
+    [altitudeProfile, feedTick, orbitAnchor, platformProfile]
   );
   const feedCenter = useMemo(
     () => (activeTarget ? activeTarget.position : aircraftPosition),
@@ -43,7 +44,7 @@ export default function IsrFeed({
     .replace(/^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/, "$1 $2 $3 $4");
 
   const targetRange = activeTarget
-    ? formatDistance(getDistanceMetres(position, activeTarget.position))
+    ? formatDistance(getDistanceMetres(aircraftPosition, activeTarget.position))
     : "NO TRACK";
   const activeTargetPosition = activeTarget
     ? getFeedPosition(feedCenter, activeTarget.position, zoomLevel, altitudeProfile)
@@ -60,13 +61,14 @@ export default function IsrFeed({
   useEffect(() => {
     if (!onSensorPositionChange) return;
 
-    if (!open || !unlockedPlatform) {
+    if (!unlockedPlatform) {
       onSensorPositionChange(null);
       return;
     }
 
-      onSensorPositionChange({
+    onSensorPositionChange({
       position: aircraftPosition,
+      anchor: orbitAnchor,
       callsign: unlockedPlatform.callsign,
       aircraft: unlockedPlatform.aircraft,
       altitude: platformAltitude,
@@ -76,7 +78,7 @@ export default function IsrFeed({
     feedTick,
     feedMode,
     onSensorPositionChange,
-    open,
+    orbitAnchor,
     platformAltitude,
     unlockedPlatform?.aircraft,
     unlockedPlatform?.callsign,
@@ -100,14 +102,14 @@ export default function IsrFeed({
   }, [activeTargetId, targets]);
 
   useEffect(() => {
-    if (!open || !unlockedPlatform) return undefined;
+    if (!unlockedPlatform) return undefined;
 
     const timer = setInterval(() => {
       setFeedTick((currentTick) => currentTick + 1);
     }, 80);
 
     return () => clearInterval(timer);
-  }, [open, unlockedPlatform]);
+  }, [unlockedPlatform]);
 
   function unlockFeed() {
     const enteredCode = accessCode.trim();
@@ -116,6 +118,7 @@ export default function IsrFeed({
     );
 
     if (platform) {
+      setOrbitAnchor(position);
       setUnlockedPlatform(platform);
       return;
     }
@@ -397,17 +400,87 @@ function getOrbitPosition(center, tick, altitudeProfile, platformProfile) {
   const phase = tick * platformProfile.orbitSpeed;
   const eastAxis = altitudeProfile.orbitEast * platformProfile.orbitScale;
   const northAxis = altitudeProfile.orbitNorth * platformProfile.orbitScale;
+
+  if (platformProfile.path === "uavOrbit") {
+    const unrotatedEast =
+      Math.cos(phase) * eastAxis +
+      Math.sin(phase * 0.7) * platformProfile.drift;
+    const unrotatedNorth =
+      Math.sin(phase) * northAxis +
+      Math.cos(phase * 0.45) * platformProfile.drift;
+
+    return offsetPosition(
+      center,
+      ...rotateOffset(unrotatedEast, unrotatedNorth, platformProfile.rotation)
+    );
+  }
+
+  if (platformProfile.path === "heliPatrol") {
+    const patrolPhase = phase * 1.45;
+    const unrotatedEast =
+      Math.sin(patrolPhase) * eastAxis * 0.55 +
+      Math.sin(patrolPhase * 2.5) * platformProfile.drift;
+    const unrotatedNorth =
+      Math.sin(patrolPhase) * Math.cos(patrolPhase) * northAxis * 0.42 +
+      Math.cos(patrolPhase * 1.7) * platformProfile.drift * 0.55;
+
+    return offsetPosition(
+      center,
+      ...rotateOffset(unrotatedEast, unrotatedNorth, platformProfile.rotation)
+    );
+  }
+
+  if (platformProfile.path === "fastRacetrack") {
+    const progress = ((phase / (Math.PI * 2)) % 1 + 1) % 1;
+    const longLeg = eastAxis;
+    const turnRadius = northAxis;
+    let unrotatedEast;
+    let unrotatedNorth;
+
+    if (progress < 0.35) {
+      const legProgress = progress / 0.35;
+      unrotatedEast = -longLeg + legProgress * longLeg * 2;
+      unrotatedNorth = turnRadius;
+    } else if (progress < 0.5) {
+      const turnProgress = (progress - 0.35) / 0.15;
+      const angle = turnProgress * Math.PI;
+      unrotatedEast = longLeg + Math.sin(angle) * turnRadius;
+      unrotatedNorth = Math.cos(angle) * turnRadius;
+    } else if (progress < 0.85) {
+      const legProgress = (progress - 0.5) / 0.35;
+      unrotatedEast = longLeg - legProgress * longLeg * 2;
+      unrotatedNorth = -turnRadius;
+    } else {
+      const turnProgress = (progress - 0.85) / 0.15;
+      const angle = Math.PI + turnProgress * Math.PI;
+      unrotatedEast = -longLeg + Math.sin(angle) * turnRadius;
+      unrotatedNorth = Math.cos(angle) * turnRadius;
+    }
+
+    return offsetPosition(
+      center,
+      ...rotateOffset(unrotatedEast, unrotatedNorth, platformProfile.rotation)
+    );
+  }
+
   const unrotatedEast =
     Math.cos(phase) * eastAxis + Math.sin(phase * 3) * platformProfile.drift;
   const unrotatedNorth =
     Math.sin(phase) * northAxis + Math.cos(phase * 2) * platformProfile.drift;
-  const rotation = toRadians(platformProfile.rotation);
-  const eastMetres =
-    unrotatedEast * Math.cos(rotation) - unrotatedNorth * Math.sin(rotation);
-  const northMetres =
-    unrotatedEast * Math.sin(rotation) + unrotatedNorth * Math.cos(rotation);
 
-  return offsetPosition(center, eastMetres, northMetres);
+  return offsetPosition(
+    center,
+    ...rotateOffset(unrotatedEast, unrotatedNorth, platformProfile.rotation)
+  );
+}
+
+function rotateOffset(eastMetres, northMetres, rotationDegrees) {
+  const rotation = toRadians(rotationDegrees);
+
+  return [
+    eastMetres * Math.cos(rotation) - northMetres * Math.sin(rotation),
+    eastMetres * Math.sin(rotation) + northMetres * Math.cos(rotation),
+  ];
 }
 
 function offsetPosition(center, eastMetres, northMetres) {
@@ -495,30 +568,55 @@ function getPlatformProfile(aircraft = "") {
 
   if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
     return {
-      label: "WIDE OVAL",
-      orbitScale: 3.8,
-      orbitSpeed: 0.00095,
+      label: "ISR ORBIT",
+      path: "uavOrbit",
+      orbitScale: 4.8,
+      orbitSpeed: 0.00055,
       rotation: 32,
-      drift: 240,
+      drift: 520,
     };
   }
 
   if (normalisedAircraft.includes("APACHE")) {
     return {
-      label: "LOCAL RACETRACK",
-      orbitScale: 0.95,
-      orbitSpeed: 0.011,
-      rotation: 24,
-      drift: 45,
+      label: "HELI PATROL",
+      path: "heliPatrol",
+      orbitScale: 1.25,
+      orbitSpeed: 0.0065,
+      rotation: 18,
+      drift: 90,
+    };
+  }
+
+  if (normalisedAircraft.includes("F-35")) {
+    return {
+      label: "HIGH RACETRACK",
+      path: "fastRacetrack",
+      orbitScale: 5.6,
+      orbitSpeed: 0.0045,
+      rotation: 42,
+      drift: 0,
+    };
+  }
+
+  if (normalisedAircraft.includes("TYPHOON")) {
+    return {
+      label: "FAST RACETRACK",
+      path: "fastRacetrack",
+      orbitScale: 4.8,
+      orbitSpeed: 0.0055,
+      rotation: 38,
+      drift: 0,
     };
   }
 
   return {
-    label: "FAST OVAL",
-    orbitScale: 1.35,
-    orbitSpeed: 0.009,
+    label: "RACETRACK",
+    path: "fastRacetrack",
+    orbitScale: 3.6,
+    orbitSpeed: 0.005,
     rotation: 36,
-    drift: 85,
+    drift: 0,
   };
 }
 
