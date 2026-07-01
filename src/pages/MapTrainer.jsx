@@ -15,9 +15,12 @@ import ObserverLine from "../components/ObserverLine.jsx";
 import MapContextMenu from "../components/MapContextMenu.jsx";
 import AirPlatformMarker from "../components/AirPlatformMarker.jsx";
 import AirPlatformLocator from "../components/AirPlatformLocator.jsx";
+import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
+import ControlPointLocator from "../components/ControlPointLocator.jsx";
 
 const savedTargets = "vintlander.targets";
 const savedObserverPosition = "vintlander.observerPosition";
+const savedControlPoints = "vintlander.controlPoints";
 
 function SerialWorkflowNav({ onNavigate }) {
   return (
@@ -48,6 +51,15 @@ function loadSavedObserverPosition() {
   }
 }
 
+function loadSavedControlPoints() {
+  try {
+    const saved = window.localStorage.getItem(savedControlPoints);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function MapTrainer({
   platforms,
   setPlatforms,
@@ -61,10 +73,16 @@ export default function MapTrainer({
   const [mapResetKey, setMapResetKey] = useState(0);
   const [targets, setTargets] = useState(loadSavedTargets);
   const [observerPosition, setObserverPosition] = useState(loadSavedObserverPosition);
+  const [controlPoints, setControlPoints] = useState(loadSavedControlPoints);
+  const [controlPointType, setControlPointType] = useState("ip");
+  const [controlPointName, setControlPointName] = useState("");
+  const [controlPointGrid, setControlPointGrid] = useState("");
   const [showObserverLine, setShowObserverLine] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [airPlatformPosition, setAirPlatformPosition] = useState(null);
   const [showAllPlatforms, setShowAllPlatforms] = useState(false);
+  const [showControlPointLocators, setShowControlPointLocators] =
+    useState(false);
   const [missionAnchor, setMissionAnchor] = useState(position);
   const [airPictureTick, setAirPictureTick] = useState(0);
 
@@ -91,6 +109,10 @@ export default function MapTrainer({
 
     window.localStorage.removeItem(savedObserverPosition);
   }, [observerPosition]);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedControlPoints, JSON.stringify(controlPoints));
+  }, [controlPoints]);
 
   useEffect(() => {
     if (!showAllPlatforms) return undefined;
@@ -138,6 +160,48 @@ export default function MapTrainer({
     setPlatforms([]);
     setTargets([]);
     setObserverPosition(null);
+    setControlPoints([]);
+  }
+
+  function buildControlPoint(pointPosition) {
+    const nextNumber =
+      controlPoints.filter((point) => point.type === controlPointType).length + 1;
+
+    return {
+      id: `${controlPointType.toUpperCase()}-${Date.now()}`,
+      type: controlPointType,
+      name:
+        controlPointName.trim() ||
+        `${controlPointType.toUpperCase()} ${nextNumber}`,
+      position: pointPosition,
+      mgrs: mgrs.forward([pointPosition.lng, pointPosition.lat]),
+      createdAt: new Date().toLocaleTimeString(),
+    };
+  }
+
+  function saveControlPointAtPosition(pointPosition) {
+    setControlPoints((current) => [...current, buildControlPoint(pointPosition)]);
+    setControlPointName("");
+  }
+
+  function saveControlPoint() {
+    saveControlPointAtPosition(position);
+  }
+
+  function saveControlPointAtGrid() {
+    try {
+      const [lng, lat] = mgrs.toPoint(controlPointGrid.trim());
+      saveControlPointAtPosition({ lat, lng });
+      setControlPointGrid("");
+    } catch {
+      alert("Invalid IP/BP MGRS grid.");
+    }
+  }
+
+  function deleteControlPoint(pointId) {
+    setControlPoints((current) =>
+      current.filter((point) => point.id !== pointId)
+    );
   }
 
   return (
@@ -213,6 +277,76 @@ export default function MapTrainer({
           setShowObserverLine={setShowObserverLine}
         />
 
+        <div className="controlPointPanel">
+          <h2>IP / BP MARKERS</h2>
+          <div className="grid compactGrid">
+            <label>
+              Type
+              <select
+                value={controlPointType}
+                onChange={(event) => setControlPointType(event.target.value)}
+              >
+                <option value="ip">IP</option>
+                <option value="bp">BP</option>
+              </select>
+            </label>
+
+            <label>
+              Name
+              <input
+                value={controlPointName}
+                onChange={(event) => setControlPointName(event.target.value)}
+                placeholder="Auto if blank"
+              />
+            </label>
+          </div>
+
+          <button onClick={saveControlPoint}>Save IP/BP At Crosshair</button>
+
+          <label className="field">
+            Centre MGRS
+            <input
+              value={controlPointGrid}
+              onChange={(event) =>
+                setControlPointGrid(event.target.value.toUpperCase())
+              }
+              placeholder="Example: 30U XB 12345 67890"
+            />
+          </label>
+
+          <button onClick={saveControlPointAtGrid}>Save IP/BP At Grid</button>
+
+          <button
+            className={`airPictureToggle ${
+              showControlPointLocators ? "activeMode" : ""
+            }`}
+            onClick={() =>
+              setShowControlPointLocators((currentValue) => !currentValue)
+            }
+          >
+            {showControlPointLocators
+              ? "Hide Off-Map IP/BP"
+              : "Show Off-Map IP/BP"}
+          </button>
+
+          {controlPoints.length === 0 ? (
+            <p className="emptyText">No IP/BP markers saved yet.</p>
+          ) : (
+            controlPoints.map((point) => (
+              <div key={point.id} className="dataRow">
+                <span>{point.name}</span>
+                <strong>{point.type.toUpperCase()}</strong>
+                <button
+                  className="removeControlPoint"
+                  onClick={() => deleteControlPoint(point.id)}
+                >
+                  Delete
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
         <TargetRegister
           targets={targets}
           setTargets={setTargets}
@@ -245,6 +379,7 @@ export default function MapTrainer({
         >
           <MapCentreTracker setPosition={setPosition} />
           <TargetMarkers targets={targets} />
+          <ControlPointMarkers controlPoints={controlPoints} />
           <ObserverMarker observerPosition={observerPosition} />
           <ObserverLine
             observerPosition={observerPosition}
@@ -279,6 +414,16 @@ export default function MapTrainer({
             zoom={zoom}
           />
         )}
+        {showControlPointLocators &&
+          controlPoints.map((point, index) => (
+            <ControlPointLocator
+              key={`${point.id}-locator`}
+              point={point}
+              mapCenter={position}
+              zoom={zoom}
+              index={index}
+            />
+          ))}
         <MapContextMenu
           contextMenu={contextMenu}
           setContextMenu={setContextMenu}

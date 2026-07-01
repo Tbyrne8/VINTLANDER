@@ -19,6 +19,18 @@ const missionStorageKeys = [
   "vintlander.trainingLogs",
   "vintlander.pendingCheckIn",
   "vintlander.attackStatus",
+  "vintlander.controlPoints",
+];
+const serialStorageKeys = [
+  "vintlander.targets",
+  "vintlander.observerPosition",
+  "vintlander.intelInjects",
+  "vintlander.targetDevelopmentStatus",
+  "vintlander.attackBriefs",
+  "vintlander.trainingLogs",
+  "vintlander.pendingCheckIn",
+  "vintlander.attackStatus",
+  "vintlander.controlPoints",
 ];
 
 function loadSavedPlatforms() {
@@ -49,6 +61,15 @@ export default function App() {
   }
 
   function exitSerial() {
+    const resetSerial = window.confirm(
+      "Reset this serial before returning to the main menu? Press OK for a fresh serial next time, or Cancel to keep current serial data."
+    );
+
+    if (resetSerial) {
+      serialStorageKeys.forEach((key) => window.localStorage.removeItem(key));
+      setPlatforms([]);
+    }
+
     setSerialMode(false);
     setPage("home");
   }

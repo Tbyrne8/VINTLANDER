@@ -396,6 +396,51 @@ select {
   color: #00ff66;
   text-shadow: 0 0 10px rgba(0, 255, 102, 0.7);
 }
+
+.controlPointLocator {
+  position: absolute;
+  z-index: 8;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 8px;
+  min-width: 104px;
+  width: max-content !important;
+  height: auto !important;
+  padding: 6px 8px;
+  background: rgba(7, 17, 8, 0.82);
+  border: 1px solid #8fd8ff;
+  border-radius: 8px;
+  color: #ffffff;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.38);
+}
+
+.controlPointLocator.bp {
+  border-color: #d6a5ff;
+}
+
+.controlPointLocator strong {
+  color: #8fd8ff;
+  font-size: 11px;
+  letter-spacing: 0.7px;
+}
+
+.controlPointLocator.bp strong {
+  color: #d6a5ff;
+}
+
+.controlPointLocator span {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.controlPointLocator small {
+  grid-column: 1 / 3;
+  color: #dfffdc;
+  font-size: 10px;
+  font-weight: 800;
+}
 .hiddenButton {
   display: none;
 }
@@ -416,6 +461,7 @@ select {
 
 .dataRow {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid #2f3f2f;
@@ -430,6 +476,18 @@ select {
   color: #ffffff;
   text-align: right;
   word-break: break-word;
+}
+
+.removeControlPoint {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 6px 8px;
+  border: 1px solid #8b3535;
+  border-radius: 6px;
+  background: #5a1f1f;
+  color: #ffffff;
+  font-size: 11px;
+  cursor: pointer;
 }
 
 .pageHeader {
@@ -1669,6 +1727,21 @@ select {
 }
 
 .platformMonitor h2 {
+  color: #f5c542;
+  margin-top: 0;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+
+.controlPointPanel {
+  margin-top: 14px;
+  border: 1px solid #3f563f;
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.controlPointPanel h2 {
   color: #f5c542;
   margin-top: 0;
   font-size: 15px;

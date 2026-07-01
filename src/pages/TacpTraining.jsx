@@ -8,6 +8,7 @@ import {
 } from "../utils/checkInGenerator.js";
 import TargetMarkers from "../components/TargetMarkers.jsx";
 import ObserverMarker from "../components/ObserverMarker.jsx";
+import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -18,6 +19,7 @@ const savedTargetStatus = "vintlander.targetDevelopmentStatus";
 const savedAttackBriefs = "vintlander.attackBriefs";
 const savedAttackStatus = "vintlander.attackStatus";
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
+const savedControlPoints = "vintlander.controlPoints";
 
 const serialPhases = [
   {
@@ -321,6 +323,9 @@ export default function TacpTraining({
   const [pendingCheckIn, setPendingCheckIn] = useState(() =>
     loadSavedValue(savedPendingCheckIn)
   );
+  const [controlPoints, setControlPoints] = useState(() =>
+    loadSavedList(savedControlPoints)
+  );
   const [selectedAircraft, setSelectedAircraft] = useState("random");
   const [completedTasks, setCompletedTasks] = useState({});
   const [controller, setController] = useState(defaultController);
@@ -333,6 +338,9 @@ export default function TacpTraining({
   const [newCallsign, setNewCallsign] = useState("");
   const [opGrid, setOpGrid] = useState("");
   const [targetGrid, setTargetGrid] = useState("");
+  const [controlPointGrid, setControlPointGrid] = useState("");
+  const [controlPointType, setControlPointType] = useState("ip");
+  const [controlPointName, setControlPointName] = useState("");
   const [targetType, setTargetType] = useState("enemy");
   const [targetDescription, setTargetDescription] = useState("");
   const [intelText, setIntelText] = useState("");
@@ -405,6 +413,10 @@ export default function TacpTraining({
 
     window.localStorage.removeItem(savedPendingCheckIn);
   }, [pendingCheckIn]);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedControlPoints, JSON.stringify(controlPoints));
+  }, [controlPoints]);
 
   useEffect(() => {
     window.localStorage.setItem(savedCallsigns, JSON.stringify(callsigns));
@@ -523,6 +535,37 @@ export default function TacpTraining({
     };
 
     setPendingCheckIn(tasking);
+  }
+
+  function saveDsControlPoint() {
+    try {
+      const position = parseMgrs(controlPointGrid);
+      const nextNumber =
+        controlPoints.filter((point) => point.type === controlPointType).length + 1;
+      const point = {
+        id: `${controlPointType.toUpperCase()}-${Date.now()}`,
+        type: controlPointType,
+        name:
+          controlPointName.trim() ||
+          `${controlPointType.toUpperCase()} ${nextNumber}`,
+        position,
+        mgrs: mgrs.forward([position.lng, position.lat]),
+        createdAt: getTimestamp(),
+        source: "DS",
+      };
+
+      setControlPoints((current) => [...current, point]);
+      setControlPointGrid("");
+      setControlPointName("");
+    } catch {
+      alert("Invalid IP/BP MGRS grid.");
+    }
+  }
+
+  function deleteControlPoint(pointId) {
+    setControlPoints((current) =>
+      current.filter((point) => point.id !== pointId)
+    );
   }
 
   function pushOpPosition() {
@@ -859,6 +902,17 @@ export default function TacpTraining({
           </div>
 
           <div className="targetIntelList">
+            {controlPoints.length > 0 && (
+              <div className="serialCard">
+                <small>IP / BP available</small>
+                {controlPoints.map((point) => (
+                  <p key={point.id}>
+                    {point.name} / {point.type.toUpperCase()} / {formatMgrs(point.position)}
+                  </p>
+                ))}
+              </div>
+            )}
+
             {targets.length === 0 ? (
               <p className="emptyText">No targets plotted yet.</p>
             ) : (
@@ -1318,7 +1372,7 @@ export default function TacpTraining({
 
           <section className="trainingGrid">
             <div className="card serialControl">
-              <h2>OP / Target Push</h2>
+              <h2>OP / IP / BP Setup</h2>
 
               <label className="field">
                 OP MGRS
@@ -1329,6 +1383,62 @@ export default function TacpTraining({
                 />
               </label>
               <button onClick={pushOpPosition}>Push OP To Troop</button>
+
+              <div className="grid compactGrid">
+                <label className="field">
+                  IP/BP MGRS
+                  <input
+                    value={controlPointGrid}
+                    onChange={(event) =>
+                      setControlPointGrid(event.target.value.toUpperCase())
+                    }
+                    placeholder="Example: 30U XB 12345 67890"
+                  />
+                </label>
+
+                <label className="field">
+                  Type
+                  <select
+                    value={controlPointType}
+                    onChange={(event) => setControlPointType(event.target.value)}
+                  >
+                    <option value="ip">IP</option>
+                    <option value="bp">BP</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="field">
+                IP/BP name
+                <input
+                  value={controlPointName}
+                  onChange={(event) => setControlPointName(event.target.value)}
+                  placeholder="Auto if blank"
+                />
+              </label>
+
+              <button onClick={saveDsControlPoint}>Pre-Assign IP/BP</button>
+
+              {controlPoints.length > 0 && (
+                <div className="targetIntelList">
+                  {controlPoints.map((point) => (
+                    <div key={point.id} className="dataRow">
+                      <span>{point.name}</span>
+                      <strong>{point.type.toUpperCase()}</strong>
+                      <button
+                        className="removeControlPoint"
+                        onClick={() => deleteControlPoint(point.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="card serialControl">
+              <h2>Target Push</h2>
 
               <div className="grid compactGrid">
                 <label className="field">
@@ -1498,6 +1608,7 @@ export default function TacpTraining({
                   disableDefaultUI={true}
                 >
                   <TargetMarkers targets={targets} />
+                  <ControlPointMarkers controlPoints={controlPoints} />
                   <ObserverMarker observerPosition={observerPosition} />
                 </Map>
               </div>
