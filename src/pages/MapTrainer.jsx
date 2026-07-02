@@ -25,6 +25,12 @@ const savedObserverPosition = "vintlander.observerPosition";
 const savedControlPoints = "vintlander.controlPoints";
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
 const savedMapCenter = "vintlander.mapCenter";
+const standaloneStorageKeys = {
+  targets: "vintlander.standalone.targets",
+  observerPosition: "vintlander.standalone.observerPosition",
+  controlPoints: "vintlander.standalone.controlPoints",
+  mapCenter: "vintlander.standalone.mapCenter",
+};
 const defaultMapPosition = { lat: 51.38466954999258, lng: -2.3747654912984433 };
 const heightBlockOptions = Array.from({ length: 30 }, (_, index) => {
   const feet = (index + 1) * 1000;
@@ -42,36 +48,47 @@ function SerialWorkflowNav({ onNavigate }) {
   );
 }
 
-function loadSavedTargets() {
+function getMapStorageKeys(serialMode) {
+  return serialMode
+    ? {
+        targets: savedTargets,
+        observerPosition: savedObserverPosition,
+        controlPoints: savedControlPoints,
+        mapCenter: savedMapCenter,
+      }
+    : standaloneStorageKeys;
+}
+
+function loadSavedTargets(storageKeys) {
   try {
-    const saved = window.localStorage.getItem(savedTargets);
+    const saved = window.localStorage.getItem(storageKeys.targets);
     return saved ? JSON.parse(saved) : [];
   } catch {
     return [];
   }
 }
 
-function loadSavedObserverPosition() {
+function loadSavedObserverPosition(storageKeys) {
   try {
-    const saved = window.localStorage.getItem(savedObserverPosition);
+    const saved = window.localStorage.getItem(storageKeys.observerPosition);
     return saved ? JSON.parse(saved) : null;
   } catch {
     return null;
   }
 }
 
-function loadSavedMapCenter() {
+function loadSavedMapCenter(storageKeys) {
   try {
-    const saved = window.localStorage.getItem(savedMapCenter);
+    const saved = window.localStorage.getItem(storageKeys.mapCenter);
     return saved ? JSON.parse(saved) : null;
   } catch {
     return null;
   }
 }
 
-function loadSavedControlPoints() {
+function loadSavedControlPoints(storageKeys) {
   try {
-    const saved = window.localStorage.getItem(savedControlPoints);
+    const saved = window.localStorage.getItem(storageKeys.controlPoints);
     return saved ? JSON.parse(saved) : [];
   } catch {
     return [];
@@ -93,16 +110,23 @@ export default function MapTrainer({
   onNavigate = () => {},
   serialMode = false,
 }) {
+  const storageKeys = useMemo(() => getMapStorageKeys(serialMode), [serialMode]);
   const [mgrsInput, setMgrsInput] = useState("");
   const [position, setPosition] = useState(
-    loadSavedMapCenter() || loadSavedObserverPosition() || defaultMapPosition
+    loadSavedMapCenter(storageKeys) ||
+      loadSavedObserverPosition(storageKeys) ||
+      defaultMapPosition
   );
   const [mapType, setMapType] = useState("satellite");
   const [zoom, setZoom] = useState(13);
   const [mapResetKey, setMapResetKey] = useState(0);
-  const [targets, setTargets] = useState(loadSavedTargets);
-  const [observerPosition, setObserverPosition] = useState(loadSavedObserverPosition);
-  const [controlPoints, setControlPoints] = useState(loadSavedControlPoints);
+  const [targets, setTargets] = useState(() => loadSavedTargets(storageKeys));
+  const [observerPosition, setObserverPosition] = useState(() =>
+    loadSavedObserverPosition(storageKeys)
+  );
+  const [controlPoints, setControlPoints] = useState(() =>
+    loadSavedControlPoints(storageKeys)
+  );
   const [controlPointType, setControlPointType] = useState("ip");
   const [controlPointName, setControlPointName] = useState("");
   const [controlPointGrid, setControlPointGrid] = useState("");
@@ -112,7 +136,9 @@ export default function MapTrainer({
   const [showAllPlatforms, setShowAllPlatforms] = useState(true);
   const [showControlPointLocators, setShowControlPointLocators] =
     useState(false);
-  const [pendingCheckIn, setPendingCheckIn] = useState(loadPendingCheckIn);
+  const [pendingCheckIn, setPendingCheckIn] = useState(() =>
+    serialMode ? loadPendingCheckIn() : null
+  );
   const [missionAnchor, setMissionAnchor] = useState(position);
   const [airPictureTick, setAirPictureTick] = useState(0);
 
@@ -159,27 +185,40 @@ export default function MapTrainer({
   );
 
   useEffect(() => {
-    window.localStorage.setItem(savedTargets, JSON.stringify(targets));
-  }, [targets]);
+    window.localStorage.setItem(storageKeys.targets, JSON.stringify(targets));
+  }, [storageKeys.targets, targets]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.mapCenter, JSON.stringify(position));
+  }, [position, storageKeys.mapCenter]);
 
   useEffect(() => {
     if (observerPosition) {
       window.localStorage.setItem(
-        savedObserverPosition,
+        storageKeys.observerPosition,
         JSON.stringify(observerPosition)
       );
       return;
     }
 
-    window.localStorage.removeItem(savedObserverPosition);
-  }, [observerPosition]);
+    window.localStorage.removeItem(storageKeys.observerPosition);
+  }, [observerPosition, storageKeys.observerPosition]);
 
   useEffect(() => {
-    window.localStorage.setItem(savedControlPoints, JSON.stringify(controlPoints));
-  }, [controlPoints]);
+    window.localStorage.setItem(
+      storageKeys.controlPoints,
+      JSON.stringify(controlPoints)
+    );
+  }, [controlPoints, storageKeys.controlPoints]);
 
   useEffect(() => {
-    if (!pendingCheckIn?.routePosition || pendingCheckIn.routeStartedAt) return;
+    if (
+      !serialMode ||
+      !pendingCheckIn?.routePosition ||
+      pendingCheckIn.routeStartedAt
+    ) {
+      return;
+    }
 
     const updatedTasking = {
       ...pendingCheckIn,
@@ -188,10 +227,11 @@ export default function MapTrainer({
 
     window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(updatedTasking));
     setPendingCheckIn(updatedTasking);
-  }, [pendingCheckIn]);
+  }, [pendingCheckIn, serialMode]);
 
   useEffect(() => {
     if (
+      !serialMode ||
       !pendingCheckIn?.routePosition ||
       !pendingCheckIn.routeStartedAt ||
       pendingCheckIn.routeEstablishedAt
@@ -215,7 +255,7 @@ export default function MapTrainer({
 
     window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(updatedTasking));
     setPendingCheckIn(updatedTasking);
-  }, [airPictureTick, pendingCheckIn]);
+  }, [airPictureTick, pendingCheckIn, serialMode]);
 
   useEffect(() => {
     const needsRouteStart = platforms.some(

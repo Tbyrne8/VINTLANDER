@@ -9,10 +9,13 @@ import MapTrainer from "./pages/MapTrainer.jsx";
 import CheckIn from "./pages/CheckIn.jsx";
 
 const savedPlatforms = "vintlander.platforms";
+const savedStandalonePlatforms = "vintlander.standalone.platforms";
 const missionStorageKeys = [
-  "vintlander.platforms",
-  "vintlander.targets",
-  "vintlander.observerPosition",
+  "vintlander.standalone.platforms",
+  "vintlander.standalone.targets",
+  "vintlander.standalone.observerPosition",
+  "vintlander.standalone.controlPoints",
+  "vintlander.standalone.mapCenter",
   "vintlander.intelInjects",
   "vintlander.targetDevelopmentStatus",
   "vintlander.attackBriefs",
@@ -34,8 +37,16 @@ const serialStorageKeys = [
 ];
 
 function loadSavedPlatforms() {
+  return loadSavedPlatformList(savedPlatforms);
+}
+
+function loadSavedStandalonePlatforms() {
+  return loadSavedPlatformList(savedStandalonePlatforms);
+}
+
+function loadSavedPlatformList(key) {
   try {
-    const saved = window.localStorage.getItem(savedPlatforms);
+    const saved = window.localStorage.getItem(key);
     return saved ? JSON.parse(saved) : [];
   } catch {
     return [];
@@ -47,10 +58,22 @@ export default function App() {
   const [serialMode, setSerialMode] = useState(false);
   const [serialVariant, setSerialVariant] = useState("ds");
   const [platforms, setPlatforms] = useState(loadSavedPlatforms);
+  const [standalonePlatforms, setStandalonePlatforms] = useState(
+    loadSavedStandalonePlatforms
+  );
+  const activePlatforms = serialMode ? platforms : standalonePlatforms;
+  const setActivePlatforms = serialMode ? setPlatforms : setStandalonePlatforms;
 
   useEffect(() => {
     window.localStorage.setItem(savedPlatforms, JSON.stringify(platforms));
   }, [platforms]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      savedStandalonePlatforms,
+      JSON.stringify(standalonePlatforms)
+    );
+  }, [standalonePlatforms]);
 
   function goToPage(nextPage) {
     setPage(nextPage);
@@ -91,7 +114,7 @@ export default function App() {
     if (!confirmed) return;
 
     missionStorageKeys.forEach((key) => window.localStorage.removeItem(key));
-    setPlatforms([]);
+    setStandalonePlatforms([]);
   }
 
   return (
@@ -129,8 +152,8 @@ export default function App() {
         )}
         {page === "tacp" && (
           <TacpTraining
-            platforms={platforms}
-            setPlatforms={setPlatforms}
+            platforms={activePlatforms}
+            setPlatforms={setActivePlatforms}
             onNavigate={goToPage}
             serialMode={serialMode}
             serialVariant={serialVariant}
@@ -139,23 +162,23 @@ export default function App() {
         )}
         {page === "nine" && (
           <NineLine
-            platforms={platforms}
+            platforms={activePlatforms}
             onNavigate={goToPage}
             serialMode={serialMode}
           />
         )}
         {page === "map" && (
           <MapTrainer
-            platforms={platforms}
-            setPlatforms={setPlatforms}
+            platforms={activePlatforms}
+            setPlatforms={setActivePlatforms}
             onNavigate={goToPage}
             serialMode={serialMode}
           />
         )}
         {page === "checkin" && (
           <CheckIn
-            platforms={platforms}
-            setPlatforms={setPlatforms}
+            platforms={activePlatforms}
+            setPlatforms={setActivePlatforms}
             onNavigate={goToPage}
             serialMode={serialMode}
           />
