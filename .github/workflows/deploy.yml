@@ -37,9 +37,10 @@ jobs:
         with:
           path: ./dist
 
-  deploy:
+    deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     permissions:
       pages: write
@@ -52,3 +53,5 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 600000
