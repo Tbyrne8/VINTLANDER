@@ -20,6 +20,7 @@ const blankCheckIn = {
 
 const firstScenario = generateCheckIn("random");
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
+const savedControlPoints = "vintlander.controlPoints";
 const deliveryOptions = [
   { id: "generatedText", label: "Generated text" },
   { id: "generatedRadio", label: "Generated radio voice" },
@@ -35,6 +36,15 @@ function loadPendingCheckIn() {
   }
 }
 
+function loadSavedControlPoints() {
+  try {
+    const saved = window.localStorage.getItem(savedControlPoints);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
 function SerialWorkflowNav({ onNavigate }) {
   return (
     <section className="missionLauncher serialWorkflowRow">
@@ -44,6 +54,51 @@ function SerialWorkflowNav({ onNavigate }) {
       <button onClick={() => onNavigate("nine")}>Build 9-Line</button>
     </section>
   );
+}
+
+function applyRouteToScenario(generatedScenario, pendingCheckIn) {
+  const routeLabel = pendingCheckIn?.routedControlPoint?.label;
+
+  if (!routeLabel) return generatedScenario;
+
+  const altitude =
+    generatedScenario.correctCheckIn.positionAltitude.split(",")[1]?.trim() ||
+    generatedScenario.correctCheckIn.positionAltitude;
+  const positionAltitude = `HOLDING ${routeLabel}, ${altitude}`;
+
+  return {
+    ...generatedScenario,
+    correctCheckIn: {
+      ...generatedScenario.correctCheckIn,
+      positionAltitude,
+    },
+    transmissions: generatedScenario.transmissions.map((transmission) => {
+      if (!transmission.title.includes("POSITION")) return transmission;
+
+      return {
+        ...transmission,
+        lines: [
+          `CURRENTLY HOLDING ${routeLabel}.`,
+          ...transmission.lines.slice(1),
+        ],
+        voiceLines: transmission.voiceLines
+          ? [
+              `CURRENTLY HOLDING ${routeLabel}.`,
+              ...transmission.voiceLines.slice(1),
+            ]
+          : undefined,
+      };
+    }),
+  };
+}
+
+function formatControlPointLabel(point) {
+  const type = (point.type || "ip").toUpperCase();
+  const rawName = String(point.name || "").trim().toUpperCase();
+
+  if (rawName.startsWith(`${type} `)) return rawName;
+
+  return `${type} ${rawName || "CONTROL"}`;
 }
 
 export default function CheckIn({
@@ -62,6 +117,8 @@ export default function CheckIn({
   const [results, setResults] = useState(null);
   const [guidedMode, setGuidedMode] = useState(!serialMode);
   const [pendingCheckIn, setPendingCheckIn] = useState(loadPendingCheckIn);
+  const [controlPoints, setControlPoints] = useState(loadSavedControlPoints);
+  const [routePickerOpen, setRoutePickerOpen] = useState(false);
   const [deliveryMode, setDeliveryMode] = useState("generatedText");
 
   const aircraftOptions = getAircraftOptions();
@@ -76,6 +133,7 @@ export default function CheckIn({
     if (serialMode) {
       setGuidedMode(false);
       setPendingCheckIn(loadPendingCheckIn());
+      setControlPoints(loadSavedControlPoints());
     }
   }, [serialMode]);
 
@@ -138,15 +196,22 @@ export default function CheckIn({
       return;
     }
 
+    if (serialMode && !pendingCheckIn?.routedControlPoint) {
+      alert("Route this aircraft to an IP/BP on the map before starting check-in.");
+      return;
+    }
+
     const aircraftId = serialMode
       ? pendingCheckIn.aircraftId
       : selectedAircraft;
-    const newScenario =
+    const generatedScenario =
       serialMode && pendingCheckIn?.manualScenario
         ? pendingCheckIn.manualScenario
         : generateCheckIn(aircraftId, {
             controllerCallsign: pendingCheckIn?.controllerCallsign,
+            direction: pendingCheckIn?.routedControlPoint?.label,
           });
+    const newScenario = applyRouteToScenario(generatedScenario, pendingCheckIn);
 
     setScenario(newScenario);
     setCheckIn(blankCheckIn);
@@ -186,6 +251,33 @@ export default function CheckIn({
     return value.trim().toUpperCase().replace(/\s+/g, " ");
   }
 
+  function routePendingAircraft(point) {
+    if (!pendingCheckIn) return;
+
+    const routeLabel = formatControlPointLabel(point);
+    const updatedTasking = {
+      ...pendingCheckIn,
+      route: `Route complete. Aircraft holding ${routeLabel} at briefed height block.`,
+      routeStatus: `HOLDING ${routeLabel}`,
+      routedControlPoint: {
+        id: point.id,
+        type: point.type,
+        name: point.name,
+        label: routeLabel,
+        position: point.position,
+        mgrs: point.mgrs,
+      },
+      routePosition: point.position,
+      routeStartedAt: Date.now(),
+      inboundStartPosition: getInboundStartPosition(point.position),
+      routedAt: new Date().toLocaleTimeString(),
+    };
+
+    window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(updatedTasking));
+    setPendingCheckIn(updatedTasking);
+    setRoutePickerOpen(false);
+  }
+
   function addCheckedInPlatform() {
     const newPlatform = {
       id: `${scenario.correctCheckIn.aircraftCallsign}-${Date.now()}`,
@@ -197,6 +289,10 @@ export default function CheckIn({
       downlinkCode: scenario.correctCheckIn.downlinkCode,
       capabilities: scenario.correctCheckIn.capabilities,
       status: "CHECKED IN",
+      route: pendingCheckIn?.route,
+      routeStatus: pendingCheckIn?.routeStatus,
+      routedControlPoint: pendingCheckIn?.routedControlPoint,
+      routePosition: pendingCheckIn?.routePosition,
     };
 
     setPlatforms((currentPlatforms) => [
@@ -314,6 +410,16 @@ export default function CheckIn({
                     {pendingCheckIn.controllerCallsign}. Delivery:{" "}
                     {pendingCheckIn.deliveryLabel || "Generated text"}.
                   </p>
+                  <p>
+                    Route:{" "}
+                    {pendingCheckIn.routeStatus ||
+                      "Route aircraft to an IP/BP before check-in."}
+                  </p>
+                  {!pendingCheckIn.routedControlPoint && (
+                    <button onClick={() => setRoutePickerOpen(true)}>
+                      Route Aircraft
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -429,6 +535,49 @@ export default function CheckIn({
             </>
           )}
         </div>
+
+        {routePickerOpen && (
+          <div className="tacticalPopupOverlay">
+            <div className="tacticalPopup">
+              <div className="popupHeader">
+                <div>
+                  <small>Aircraft routing</small>
+                  <h2>{pendingCheckIn?.aircraftLabel || "Pending aircraft"}</h2>
+                </div>
+                <button onClick={() => setRoutePickerOpen(false)}>Close</button>
+              </div>
+
+              {controlPoints.length === 0 ? (
+                <p className="emptyText">
+                  No IP/BP available. Open the map to add or receive one.
+                </p>
+              ) : (
+                <div className="routePickerGrid">
+                  {controlPoints.map((point) => (
+                    <button
+                      key={point.id}
+                      className="routePickerOption"
+                      onClick={() => routePendingAircraft(point)}
+                    >
+                      <strong>{formatControlPointLabel(point)}</strong>
+                      <span>{point.mgrs || "Grid not stored"}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <button
+                className="secondaryAction"
+                onClick={() => {
+                  setRoutePickerOpen(false);
+                  onNavigate("map");
+                }}
+              >
+                Show Full Map
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="kneeboardSection">
           <h2>AIRCRAFT</h2>
@@ -608,4 +757,19 @@ export default function CheckIn({
       </section>
     </main>
   );
+}
+
+function getInboundStartPosition(routePosition) {
+  return offsetPosition(routePosition, -18000, -9000);
+}
+
+function offsetPosition(center, eastMetres, northMetres) {
+  const metresPerDegreeLat = 111320;
+  const metresPerDegreeLng =
+    111320 * Math.cos((center.lat * Math.PI) / 180);
+
+  return {
+    lat: center.lat + northMetres / metresPerDegreeLat,
+    lng: center.lng + eastMetres / metresPerDegreeLng,
+  };
 }

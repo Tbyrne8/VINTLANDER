@@ -18,7 +18,11 @@ export default function MapCentreTracker({ setPosition }) {
       });
     });
 
-    return () => listener.remove();
+    return () => {
+      if (listener?.remove) {
+        listener.remove();
+      }
+    };
   }, [map, setPosition]);
 
   return null;

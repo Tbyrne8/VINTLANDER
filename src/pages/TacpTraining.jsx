@@ -289,6 +289,30 @@ function formatCheckInTime(checkedInAt) {
   });
 }
 
+function formatControlPointLabel(point) {
+  const type = (point.type || "ip").toUpperCase();
+  const rawName = String(point.name || "").trim().toUpperCase();
+
+  if (rawName.startsWith(`${type} `)) return rawName;
+
+  return `${type} ${rawName || "CONTROL"}`;
+}
+
+function getInboundStartPosition(routePosition) {
+  return offsetPosition(routePosition, -18000, -9000);
+}
+
+function offsetPosition(center, eastMetres, northMetres) {
+  const metresPerDegreeLat = 111320;
+  const metresPerDegreeLng =
+    111320 * Math.cos((center.lat * Math.PI) / 180);
+
+  return {
+    lat: center.lat + northMetres / metresPerDegreeLat,
+    lng: center.lng + eastMetres / metresPerDegreeLng,
+  };
+}
+
 function parseMgrs(value) {
   const [lng, lat] = mgrs.toPoint(value.replace(/\s+/g, "").trim());
   return { lat, lng };
@@ -331,6 +355,7 @@ export default function TacpTraining({
   const [controller, setController] = useState(defaultController);
   const [debrief, setDebrief] = useState("");
   const [activeView, setActiveView] = useState("trainee");
+  const [routePickerOpen, setRoutePickerOpen] = useState(false);
   const [callsigns, setCallsigns] = useState(() => {
     const saved = loadSavedList(savedCallsigns);
     return saved.length ? saved : getDefaultCallsigns();
@@ -531,7 +556,10 @@ export default function TacpTraining({
           ?.label || "Generated text",
       manualScenario,
       pushedAt: getTimestamp(),
-      route: "Route to assigned IP and hold at the briefed height block for check-in.",
+      route: "Awaiting troop route to an IP/BP before check-in.",
+      routeStatus: "AWAITING TROOP ROUTE",
+      routedControlPoint: null,
+      routedAt: null,
     };
 
     setPendingCheckIn(tasking);
@@ -752,6 +780,32 @@ export default function TacpTraining({
     setBdaText("");
   }
 
+  function routePendingAircraft(point) {
+    if (!pendingCheckIn) return;
+
+    const routeLabel = formatControlPointLabel(point);
+    const updatedTasking = {
+      ...pendingCheckIn,
+      route: `Route complete. Aircraft holding ${routeLabel} at briefed height block.`,
+      routeStatus: `HOLDING ${routeLabel}`,
+      routedControlPoint: {
+        id: point.id,
+        type: point.type,
+        name: point.name,
+        label: routeLabel,
+        position: point.position,
+        mgrs: point.mgrs,
+      },
+      routePosition: point.position,
+      routeStartedAt: Date.now(),
+      inboundStartPosition: getInboundStartPosition(point.position),
+      routedAt: getTimestamp(),
+    };
+
+    setPendingCheckIn(updatedTasking);
+    setRoutePickerOpen(false);
+  }
+
   return (
     <main className="page trainingPage">
       <header className="pageHeader">
@@ -811,6 +865,12 @@ export default function TacpTraining({
                 {pendingCheckIn.pushedAt}. Callsign to answer:{" "}
                 {pendingCheckIn.controllerCallsign}.
               </p>
+              <p>{pendingCheckIn.routeStatus || "AWAITING TROOP ROUTE"}</p>
+              {!pendingCheckIn.routedControlPoint && (
+                <button onClick={() => setRoutePickerOpen(true)}>
+                  Route Aircraft
+                </button>
+              )}
             </div>
           )}
 
@@ -991,6 +1051,49 @@ export default function TacpTraining({
           </div>
         </div>
       </section>
+
+      {routePickerOpen && (
+        <div className="tacticalPopupOverlay">
+          <div className="tacticalPopup">
+            <div className="popupHeader">
+              <div>
+                <small>Aircraft routing</small>
+                <h2>{pendingCheckIn?.aircraftLabel || "Pending aircraft"}</h2>
+              </div>
+              <button onClick={() => setRoutePickerOpen(false)}>Close</button>
+            </div>
+
+            {controlPoints.length === 0 ? (
+              <p className="emptyText">
+                No IP/BP available. Open the map to add or receive one.
+              </p>
+            ) : (
+              <div className="routePickerGrid">
+                {controlPoints.map((point) => (
+                  <button
+                    key={point.id}
+                    className="routePickerOption"
+                    onClick={() => routePendingAircraft(point)}
+                  >
+                    <strong>{formatControlPointLabel(point)}</strong>
+                    <span>{point.mgrs || formatMgrs(point.position)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <button
+              className="secondaryAction"
+              onClick={() => {
+                setRoutePickerOpen(false);
+                onNavigate("map");
+              }}
+            >
+              Show Full Map
+            </button>
+          </div>
+        </div>
+      )}
         </>
       )}
 
@@ -1188,6 +1291,9 @@ export default function TacpTraining({
                     Troop should complete assessed check-in as{" "}
                     {pendingCheckIn.controllerCallsign}. Delivery:{" "}
                     {pendingCheckIn.deliveryLabel || "Generated text"}.
+                  </p>
+                  <p>
+                    Route: {pendingCheckIn.routeStatus || "Awaiting troop route"}
                   </p>
                 </div>
               )}
@@ -1774,6 +1880,7 @@ export default function TacpTraining({
                     <th>Downlink</th>
                     <th>Capabilities</th>
                     <th>Status</th>
+                    <th>Route</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1787,6 +1894,7 @@ export default function TacpTraining({
                       <td>{platform.downlinkCode}</td>
                       <td>{platform.capabilities}</td>
                       <td>{platform.status}</td>
+                      <td>{platform.routeStatus || platform.route || "Not set"}</td>
                     </tr>
                   ))}
                 </tbody>

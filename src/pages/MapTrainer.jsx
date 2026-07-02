@@ -17,10 +17,12 @@ import AirPlatformMarker from "../components/AirPlatformMarker.jsx";
 import AirPlatformLocator from "../components/AirPlatformLocator.jsx";
 import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
 import ControlPointLocator from "../components/ControlPointLocator.jsx";
+import PendingRouteLine from "../components/PendingRouteLine.jsx";
 
 const savedTargets = "vintlander.targets";
 const savedObserverPosition = "vintlander.observerPosition";
 const savedControlPoints = "vintlander.controlPoints";
+const savedPendingCheckIn = "vintlander.pendingCheckIn";
 
 function SerialWorkflowNav({ onNavigate }) {
   return (
@@ -60,6 +62,15 @@ function loadSavedControlPoints() {
   }
 }
 
+function loadPendingCheckIn() {
+  try {
+    const saved = window.localStorage.getItem(savedPendingCheckIn);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function MapTrainer({
   platforms,
   setPlatforms,
@@ -83,6 +94,7 @@ export default function MapTrainer({
   const [showAllPlatforms, setShowAllPlatforms] = useState(false);
   const [showControlPointLocators, setShowControlPointLocators] =
     useState(false);
+  const [pendingCheckIn, setPendingCheckIn] = useState(loadPendingCheckIn);
   const [missionAnchor, setMissionAnchor] = useState(position);
   const [airPictureTick, setAirPictureTick] = useState(0);
 
@@ -93,6 +105,23 @@ export default function MapTrainer({
       getPlatformTrack(platform, missionAnchor, airPictureTick + index * 1400)
     );
   }, [airPictureTick, missionAnchor, platforms, showAllPlatforms]);
+
+  const routedPendingPlatform = useMemo(() => {
+    if (!pendingCheckIn?.routePosition) return null;
+
+    return getPendingPlatformTrack(pendingCheckIn, airPictureTick);
+  }, [airPictureTick, pendingCheckIn]);
+
+  const pendingRouteLine = useMemo(() => {
+    if (!pendingCheckIn?.routePosition || !routedPendingPlatform) return null;
+
+    if (routedPendingPlatform.routePhase !== "inbound") return null;
+
+    return {
+      from: routedPendingPlatform.position,
+      to: pendingCheckIn.routePosition,
+    };
+  }, [pendingCheckIn, routedPendingPlatform]);
 
   useEffect(() => {
     window.localStorage.setItem(savedTargets, JSON.stringify(targets));
@@ -115,14 +144,14 @@ export default function MapTrainer({
   }, [controlPoints]);
 
   useEffect(() => {
-    if (!showAllPlatforms) return undefined;
+    if (!showAllPlatforms && !pendingCheckIn?.routePosition) return undefined;
 
     const timer = setInterval(() => {
       setAirPictureTick((currentTick) => currentTick + 1);
-    }, 1000);
+    }, 500);
 
     return () => clearInterval(timer);
-  }, [showAllPlatforms]);
+  }, [pendingCheckIn?.routePosition, showAllPlatforms]);
 
   function plotMgrs() {
     try {
@@ -204,6 +233,35 @@ export default function MapTrainer({
     );
   }
 
+  function routePendingAircraft(point) {
+    if (!pendingCheckIn) return;
+
+    const routeLabel = formatControlPointLabel(point);
+    const updatedTasking = {
+      ...pendingCheckIn,
+      route: `Route complete. Aircraft holding ${routeLabel} at briefed height block.`,
+      routeStatus: `HOLDING ${routeLabel}`,
+      routedControlPoint: {
+        id: point.id,
+        type: point.type,
+        name: point.name,
+        label: routeLabel,
+        position: point.position,
+        mgrs: point.mgrs,
+      },
+      routePosition: point.position,
+      routeStartedAt: Date.now(),
+      inboundStartPosition: getInboundStartPosition(point.position),
+      routedAt: new Date().toLocaleTimeString(),
+    };
+
+    window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(updatedTasking));
+    setPendingCheckIn(updatedTasking);
+    setMissionAnchor(point.position);
+    setPosition(point.position);
+    setMapResetKey((current) => current + 1);
+  }
+
   return (
     <main className="mapPage">
       <section className="mapControls">
@@ -249,6 +307,19 @@ export default function MapTrainer({
             <p className="emptyText">No aircraft checked in yet.</p>
           )}
 
+          {serialMode && pendingCheckIn && (
+            <div className="serialCard routeCard">
+              <small>Pending aircraft</small>
+              <p>
+                {pendingCheckIn.aircraftLabel} /{" "}
+                {pendingCheckIn.routeStatus || "AWAITING TROOP ROUTE"}
+              </p>
+              {pendingCheckIn.routedControlPoint && (
+                <p>Icon shown at {pendingCheckIn.routedControlPoint.label}.</p>
+              )}
+            </div>
+          )}
+
           {platforms.map((platform) => (
             <div key={platform.id} className="platformCard">
               <strong>{platform.callsign}</strong>
@@ -257,6 +328,7 @@ export default function MapTrainer({
               <small>PLAYTIME: {platform.playtime}</small>
               <small>DL: {platform.downlinkCode}</small>
               <small>{platform.status}</small>
+              {platform.routeStatus && <small>{platform.routeStatus}</small>}
               <button
                 className="removePlatform"
                 onClick={() => removePlatform(platform.id)}
@@ -315,6 +387,34 @@ export default function MapTrainer({
           </label>
 
           <button onClick={saveControlPointAtGrid}>Save IP/BP At Grid</button>
+
+          {serialMode && pendingCheckIn && (
+            <div className="serialCard routeCard">
+              <small>Aircraft routing</small>
+              <p>
+                {pendingCheckIn.aircraftLabel} /{" "}
+                {pendingCheckIn.routeStatus || "AWAITING TROOP ROUTE"}
+              </p>
+
+              {controlPoints.length === 0 ? (
+                <p className="emptyText">Add or receive an IP/BP before routing.</p>
+              ) : (
+                controlPoints.map((point) => (
+                  <button
+                    key={`${point.id}-route`}
+                    className={
+                      pendingCheckIn.routedControlPoint?.id === point.id
+                        ? "activeMode"
+                        : ""
+                    }
+                    onClick={() => routePendingAircraft(point)}
+                  >
+                    Route To {formatControlPointLabel(point)}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
 
           <button
             className={`airPictureToggle ${
@@ -386,12 +486,21 @@ export default function MapTrainer({
             position={position}
             showLine={showObserverLine}
           />
+          {pendingRouteLine && (
+            <PendingRouteLine from={pendingRouteLine.from} to={pendingRouteLine.to} />
+          )}
           {showAllPlatforms ? (
-            visibleAirPlatforms.map((platform) => (
-              <AirPlatformMarker key={platform.id} platform={platform} />
-            ))
+            <>
+              {visibleAirPlatforms.map((platform) => (
+                <AirPlatformMarker key={platform.id} platform={platform} />
+              ))}
+              <AirPlatformMarker platform={routedPendingPlatform} />
+            </>
           ) : (
-            <AirPlatformMarker platform={airPlatformPosition} />
+            <>
+              <AirPlatformMarker platform={airPlatformPosition} />
+              <AirPlatformMarker platform={routedPendingPlatform} />
+            </>
           )}
         </Map>
 
@@ -444,7 +553,12 @@ export default function MapTrainer({
 function getPlatformTrack(platform, anchor, tick) {
   const altitudeProfile = getAltitudeProfile(platform.positionAltitude);
   const platformProfile = getPlatformProfile(platform.aircraft);
-  const orbitCenter = getStandoffOrbitCenter(anchor, altitudeProfile, platformProfile);
+  const trackAnchor = platform.routePosition || platform.anchor || anchor;
+  const orbitCenter = getStandoffOrbitCenter(
+    trackAnchor,
+    altitudeProfile,
+    platformProfile
+  );
   const position = getOrbitPosition(orbitCenter, tick, altitudeProfile, platformProfile);
 
   return {
@@ -455,6 +569,73 @@ function getPlatformTrack(platform, anchor, tick) {
     altitude: formatPlatformAltitude(platform.positionAltitude),
     mode: platformProfile.label,
   };
+}
+
+function getPendingPlatformTrack(pendingCheckIn, tick) {
+  const routePosition = pendingCheckIn.routePosition;
+  const routeStartedAt = pendingCheckIn.routeStartedAt || Date.now();
+  const elapsed = Date.now() - routeStartedAt;
+  const inboundProgress = Math.min(1, Math.max(0, elapsed / 20000));
+  const inboundStart =
+    pendingCheckIn.inboundStartPosition || getInboundStartPosition(routePosition);
+  const aircraft = pendingCheckIn.aircraftLabel || "Pending aircraft";
+
+  if (inboundProgress < 1) {
+    const position = interpolatePosition(
+      inboundStart,
+      routePosition,
+      easeInOut(inboundProgress)
+    );
+
+    return {
+      id: `${pendingCheckIn.id}-inbound`,
+      callsign: aircraft,
+      aircraft,
+      position,
+      altitude: "Inbound",
+      mode: `Routing to ${pendingCheckIn.routedControlPoint?.label || "IP/BP"}`,
+      routePhase: "inbound",
+    };
+  }
+
+  const holdingPlatform = {
+    id: `${pendingCheckIn.id}-holding`,
+    callsign: aircraft,
+    aircraft,
+    positionAltitude: pendingCheckIn.routeAltitude || "18000 FT",
+    routePosition,
+  };
+
+  return {
+    ...getPlatformTrack(holdingPlatform, routePosition, tick + 4000),
+    altitude: pendingCheckIn.routeStatus,
+    mode: "Awaiting check-in",
+    routePhase: "holding",
+  };
+}
+
+function formatControlPointLabel(point) {
+  const type = (point.type || "ip").toUpperCase();
+  const rawName = String(point.name || "").trim().toUpperCase();
+
+  if (rawName.startsWith(`${type} `)) return rawName;
+
+  return `${type} ${rawName || "CONTROL"}`;
+}
+
+function getInboundStartPosition(routePosition) {
+  return offsetPosition(routePosition, -18000, -9000);
+}
+
+function interpolatePosition(from, to, progress) {
+  return {
+    lat: from.lat + (to.lat - from.lat) * progress,
+    lng: from.lng + (to.lng - from.lng) * progress,
+  };
+}
+
+function easeInOut(progress) {
+  return progress * progress * (3 - 2 * progress);
 }
 
 function getOrbitPosition(center, tick, altitudeProfile, platformProfile) {

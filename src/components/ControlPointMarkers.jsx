@@ -16,10 +16,6 @@ const controlPointStyle = {
   },
 };
 
-const controlPointColourSignature = Object.values(controlPointStyle)
-  .map((style) => `${style.label}:${style.colour}:${style.fillOpacity}`)
-  .join("|");
-
 function makeControlPointIcon(point) {
   const style = controlPointStyle[point.type] || controlPointStyle.ip;
   const rawName = String(point.name || "").trim();
@@ -68,7 +64,7 @@ export default function ControlPointMarkers({ controlPoints = [] }) {
     return () => {
       polygons.forEach((polygon) => polygon.setMap(null));
     };
-  }, [controlPoints, map, controlPointColourSignature]);
+  }, [controlPoints, map]);
 
   return (
     <>
