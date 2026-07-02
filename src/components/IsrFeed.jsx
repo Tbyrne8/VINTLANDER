@@ -19,6 +19,7 @@ export default function IsrFeed({
   const [trackLockedAt, setTrackLockedAt] = useState(null);
   const [feedTick, setFeedTick] = useState(0);
   const [orbitAnchor, setOrbitAnchor] = useState(position);
+  const [displayedFeedCenter, setDisplayedFeedCenter] = useState(position);
 
   const currentMgrs = mgrs
     .forward([orbitAnchor.lng, orbitAnchor.lat])
@@ -42,10 +43,14 @@ export default function IsrFeed({
       getOrbitPosition(orbitCenter, feedTick, altitudeProfile, platformProfile),
     [altitudeProfile, feedTick, orbitCenter, platformProfile]
   );
-  const feedCenter = useMemo(
+  const desiredFeedCenter = useMemo(
     () => (activeTarget ? activeTarget.position : aircraftPosition),
     [activeTarget, aircraftPosition]
   );
+  const feedCenter = displayedFeedCenter || desiredFeedCenter;
+  const isSlewing =
+    unlockedPlatform &&
+    getDistanceMetres(feedCenter, desiredFeedCenter) > getSlewToleranceMetres(zoomLevel);
   const feedCenterMgrs = mgrs
     .forward([feedCenter.lng, feedCenter.lat])
     .replace(/^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/, "$1 $2 $3 $4");
@@ -110,6 +115,30 @@ export default function IsrFeed({
     unlockedPlatform?.callsign,
     unlockedPlatform?.id,
   ]);
+
+  useEffect(() => {
+    if (!unlockedPlatform) {
+      setDisplayedFeedCenter(position);
+      return;
+    }
+
+    setDisplayedFeedCenter((currentCenter) =>
+      currentCenter || desiredFeedCenter
+    );
+  }, [desiredFeedCenter, position, unlockedPlatform]);
+
+  useEffect(() => {
+    if (!unlockedPlatform) return;
+
+    setDisplayedFeedCenter((currentCenter) =>
+      slewPosition(
+        currentCenter || desiredFeedCenter,
+        desiredFeedCenter,
+        activeTarget ? 0.055 : 0.095,
+        getSlewToleranceMetres(zoomLevel)
+      )
+    );
+  }, [activeTarget, desiredFeedCenter, feedTick, unlockedPlatform, zoomLevel]);
 
   useEffect(() => {
     if (
@@ -279,6 +308,7 @@ export default function IsrFeed({
                 <div className="vdlReticle"></div>
                 <div className="vdlScanline"></div>
                 <div className="vdlModeTag">{sensorMode}</div>
+                {isSlewing && <div className="vdlSlewTag">SLEW</div>}
                 <div className="vdlNorthMarker">
                   <span
                     className="vdlNorthArrow"
@@ -787,22 +817,38 @@ function getAltitudeProfile(positionAltitude = "") {
   };
 }
 
+function isRotaryWingAircraft(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  return ["APACHE", "AH-64", "TIGER", "AH-1", "COBRA", "HELI"].some((term) =>
+    normalisedAircraft.includes(term)
+  );
+}
+
+function isUavAircraft(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  return ["MQ-9", "REAPER", "WATCHKEEPER", "UAV", "RPAS"].some((term) =>
+    normalisedAircraft.includes(term)
+  );
+}
+
 function getPlatformProfile(aircraft = "") {
   const normalisedAircraft = aircraft.toUpperCase();
 
-  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
+  if (isUavAircraft(aircraft)) {
     return {
       label: "ISR ORBIT",
       path: "uavOrbit",
-      orbitScale: 4.8,
-      speedMps: 46,
+      orbitScale: 1.45,
+      speedMps: 42,
       rotation: 32,
-      drift: 520,
-      standoffMetres: 5200,
+      drift: 110,
+      standoffMetres: 1200,
     };
   }
 
-  if (normalisedAircraft.includes("APACHE")) {
+  if (isRotaryWingAircraft(aircraft)) {
     return {
       label: "HELI PATROL",
       path: "heliPatrol",
@@ -811,6 +857,30 @@ function getPlatformProfile(aircraft = "") {
       rotation: 18,
       drift: 90,
       standoffMetres: 1200,
+    };
+  }
+
+  if (normalisedAircraft.includes("A-10")) {
+    return {
+      label: "CAS RACETRACK",
+      path: "fastRacetrack",
+      orbitScale: 3.9,
+      speedMps: 125,
+      rotation: 30,
+      drift: 0,
+      standoffMetres: 6500,
+    };
+  }
+
+  if (normalisedAircraft.includes("AC-130")) {
+    return {
+      label: "GUNSHIP ORBIT",
+      path: "uavOrbit",
+      orbitScale: 3.8,
+      speedMps: 105,
+      rotation: 28,
+      drift: 260,
+      standoffMetres: 4800,
     };
   }
 
@@ -826,7 +896,11 @@ function getPlatformProfile(aircraft = "") {
     };
   }
 
-  if (normalisedAircraft.includes("TYPHOON")) {
+  if (
+    ["TYPHOON", "F-16", "F-15", "F/A-18", "FA-18", "RAFALE", "GRIPEN", "TORNADO"].some(
+      (term) => normalisedAircraft.includes(term)
+    )
+  ) {
     return {
       label: "FAST RACETRACK",
       path: "fastRacetrack",
@@ -896,6 +970,30 @@ function getSensorZoomMapBoost(zoomLevel) {
   };
 
   return boostByZoom[zoomLevel] || 0;
+}
+
+function slewPosition(current, target, factor, toleranceMetres) {
+  if (!current || !target) return target;
+
+  const distanceMetres = getDistanceMetres(current, target);
+
+  if (distanceMetres <= toleranceMetres) return target;
+
+  return {
+    lat: current.lat + (target.lat - current.lat) * factor,
+    lng: current.lng + (target.lng - current.lng) * factor,
+  };
+}
+
+function getSlewToleranceMetres(zoomLevel) {
+  const toleranceByZoom = {
+    1: 60,
+    4: 35,
+    12: 16,
+    32: 6,
+  };
+
+  return toleranceByZoom[zoomLevel] || 25;
 }
 
 function clamp(value, min, max) {

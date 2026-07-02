@@ -116,13 +116,19 @@ export default function MapTrainer({
   const [missionAnchor, setMissionAnchor] = useState(position);
   const [airPictureTick, setAirPictureTick] = useState(0);
 
+  const livePlatformTracks = useMemo(
+    () =>
+      platforms.map((platform, index) =>
+      getLivePlatformTrack(platform, missionAnchor, airPictureTick + index * 1400)
+      ),
+    [airPictureTick, missionAnchor, platforms]
+  );
+
   const visibleAirPlatforms = useMemo(() => {
     if (!showAllPlatforms) return [];
 
-    return platforms.map((platform, index) =>
-      getPlatformTrack(platform, missionAnchor, airPictureTick + index * 1400)
-    );
-  }, [airPictureTick, missionAnchor, platforms, showAllPlatforms]);
+    return livePlatformTracks;
+  }, [livePlatformTracks, showAllPlatforms]);
 
   const routedPendingPlatform = useMemo(() => {
     if (!pendingCheckIn?.routePosition) return null;
@@ -140,6 +146,17 @@ export default function MapTrainer({
       to: pendingCheckIn.routePosition,
     };
   }, [pendingCheckIn, routedPendingPlatform]);
+  const platformRouteLines = useMemo(
+    () =>
+      livePlatformTracks
+        .filter((platform) => platform.routePhase === "inbound" && platform.routePosition)
+        .map((platform) => ({
+          id: platform.id,
+          from: platform.position,
+          to: platform.routePosition,
+        })),
+    [livePlatformTracks]
+  );
 
   useEffect(() => {
     window.localStorage.setItem(savedTargets, JSON.stringify(targets));
@@ -199,6 +216,81 @@ export default function MapTrainer({
     window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(updatedTasking));
     setPendingCheckIn(updatedTasking);
   }, [airPictureTick, pendingCheckIn]);
+
+  useEffect(() => {
+    const needsRouteStart = platforms.some(
+      (platform) =>
+        platform.routePosition &&
+        !platform.routeStartedAt &&
+        !platform.routeEstablishedAt &&
+        /ROUTING TO/i.test(platform.routeStatus || platform.route || "")
+    );
+
+    if (!needsRouteStart) return;
+
+    setPlatforms((currentPlatforms) =>
+      currentPlatforms.map((platform) => {
+        if (
+          !platform.routePosition ||
+          platform.routeStartedAt ||
+          platform.routeEstablishedAt ||
+          !/ROUTING TO/i.test(platform.routeStatus || platform.route || "")
+        ) {
+          return platform;
+        }
+
+        return {
+          ...platform,
+          routeStartedAt: Date.now(),
+          inboundStartPosition:
+            platform.inboundStartPosition ||
+            getInboundStartPosition(platform.routePosition),
+        };
+      })
+    );
+  }, [platforms, setPlatforms]);
+
+  useEffect(() => {
+    const inboundPlatforms = platforms.filter(
+      (platform) =>
+        platform.routePosition &&
+        platform.routeStartedAt &&
+        !platform.routeEstablishedAt
+    );
+
+    if (inboundPlatforms.length === 0) return;
+
+    const now = Date.now();
+    const needsUpdate = inboundPlatforms.some(
+      (platform) => now - platform.routeStartedAt >= getRouteTransitDurationMs(platform)
+    );
+
+    if (!needsUpdate) return;
+
+    setPlatforms((currentPlatforms) =>
+      currentPlatforms.map((platform) => {
+        if (
+          !platform.routePosition ||
+          !platform.routeStartedAt ||
+          platform.routeEstablishedAt ||
+          now - platform.routeStartedAt < getRouteTransitDurationMs(platform)
+        ) {
+          return platform;
+        }
+
+        const routeLabel =
+          platform.routedControlPoint?.label ||
+          formatControlPointLabel(platform.routedControlPoint || {});
+
+        return {
+          ...platform,
+          route: `Aircraft established in ${routeLabel}.`,
+          routeStatus: `ESTABLISHED IN ${routeLabel}`,
+          routeEstablishedAt: now,
+        };
+      })
+    );
+  }, [airPictureTick, platforms, setPlatforms]);
 
   useEffect(() => {
     if (!showAllPlatforms && !pendingCheckIn?.routePosition) return undefined;
@@ -358,6 +450,55 @@ export default function MapTrainer({
     );
   }
 
+  function routeCheckedInPlatform(platformId, pointId) {
+    const point = controlPoints.find((controlPoint) => controlPoint.id === pointId);
+    const platform = platforms.find((currentPlatform) => currentPlatform.id === platformId);
+
+    if (!point || !platform) return;
+
+    const routeType = getControlPointRoleForAircraft(platform.aircraft);
+
+    if (point.type !== routeType) {
+      alert(
+        `${platform.aircraft || "This aircraft"} should be routed to a ${routeType.toUpperCase()}.`
+      );
+      return;
+    }
+
+    const routeLabel = formatControlPointLabel(point);
+    const currentTrack = getLivePlatformTrack(platform, missionAnchor, airPictureTick);
+
+    setPlatforms((currentPlatforms) =>
+      currentPlatforms.map((currentPlatform) =>
+        currentPlatform.id === platformId
+          ? {
+              ...currentPlatform,
+              route: `Aircraft cleared to ${routeLabel}. Await established call.`,
+              routeStatus: `ROUTING TO ${routeLabel}`,
+              routeEstablishedAt: null,
+              routedControlPoint: {
+                id: point.id,
+                type: point.type,
+                name: point.name,
+                label: routeLabel,
+                position: point.position,
+                mgrs: point.mgrs,
+              },
+              routePosition: point.position,
+              routeAltitude:
+                currentPlatform.routeAltitude ||
+                getDefaultRouteAltitude(currentPlatform.aircraft),
+              routeStartedAt: Date.now(),
+              inboundStartPosition:
+                currentTrack?.position || getInboundStartPosition(point.position),
+              routedAt: new Date().toLocaleTimeString(),
+              anchor: point.position,
+            }
+          : currentPlatform
+      )
+    );
+  }
+
   return (
     <main className="mapPage">
       <section className="mapControls">
@@ -425,6 +566,26 @@ export default function MapTrainer({
               <small>DL: {platform.downlinkCode}</small>
               <small>{platform.status}</small>
               {platform.routeStatus && <small>{platform.routeStatus}</small>}
+              {controlPoints.length > 0 && (
+                <label className="routeSelect">
+                  Reroute
+                  <select
+                    value={platform.routedControlPoint?.id || ""}
+                    onChange={(event) =>
+                      routeCheckedInPlatform(platform.id, event.target.value)
+                    }
+                  >
+                    <option value="">Select IP/BP</option>
+                    {getRouteableControlPoints(controlPoints, platform.aircraft).map(
+                      (point) => (
+                        <option key={point.id} value={point.id}>
+                          {formatControlPointLabel(point)}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+              )}
               <button
                 className="removePlatform"
                 onClick={() => removePlatform(platform.id)}
@@ -613,6 +774,26 @@ export default function MapTrainer({
                       ))}
                     </select>
                   </label>
+                  {controlPoints.length > 0 && (
+                    <label>
+                      Route
+                      <select
+                        value={platform.routedControlPoint?.id || ""}
+                        onChange={(event) =>
+                          routeCheckedInPlatform(platform.id, event.target.value)
+                        }
+                      >
+                        <option value="">Select</option>
+                        {getRouteableControlPoints(controlPoints, platform.aircraft).map(
+                          (point) => (
+                            <option key={point.id} value={point.id}>
+                              {formatControlPointLabel(point)}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+                  )}
                 </div>
               ))}
             </div>
@@ -651,6 +832,9 @@ export default function MapTrainer({
           {pendingRouteLine && (
             <PendingRouteLine from={pendingRouteLine.from} to={pendingRouteLine.to} />
           )}
+          {platformRouteLines.map((line) => (
+            <PendingRouteLine key={line.id} from={line.from} to={line.to} />
+          ))}
           {showAllPlatforms ? (
             <>
               {visibleAirPlatforms.map((platform) => (
@@ -740,6 +924,42 @@ function getPlatformTrack(platform, anchor, tick) {
   };
 }
 
+function getLivePlatformTrack(platform, anchor, tick) {
+  if (platform.routePosition && platform.routeStartedAt && !platform.routeEstablishedAt) {
+    return getInboundPlatformTrack(platform, tick);
+  }
+
+  return getPlatformTrack(platform, anchor, tick);
+}
+
+function getInboundPlatformTrack(platform, tick) {
+  const routePosition = platform.routePosition;
+  const routeStartedAt = platform.routeStartedAt || Date.now();
+  const elapsed = Date.now() - routeStartedAt;
+  const inboundProgress = Math.min(
+    1,
+    Math.max(0, elapsed / getRouteTransitDurationMs(platform))
+  );
+  const inboundStart =
+    platform.inboundStartPosition || getInboundStartPosition(routePosition);
+  const position = interpolatePosition(
+    inboundStart,
+    routePosition,
+    easeInOut(inboundProgress)
+  );
+
+  return {
+    id: platform.id,
+    position,
+    routePosition,
+    callsign: platform.callsign,
+    aircraft: platform.aircraft,
+    altitude: formatSpeedLabel(platform.aircraft),
+    mode: `Routing to ${platform.routedControlPoint?.label || "IP/BP"}`,
+    routePhase: "inbound",
+  };
+}
+
 function getPendingPlatformTrack(pendingCheckIn, tick) {
   const routePosition = pendingCheckIn.routePosition;
   const routeStartedAt = pendingCheckIn.routeStartedAt || Date.now();
@@ -786,10 +1006,24 @@ function getPendingPlatformTrack(pendingCheckIn, tick) {
   };
 }
 
-function getControlPointRoleForAircraft(aircraft = "") {
+function isRotaryWingAircraft(aircraft = "") {
   const normalisedAircraft = aircraft.toUpperCase();
 
-  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+  return ["APACHE", "AH-64", "TIGER", "AH-1", "COBRA", "HELI"].some((term) =>
+    normalisedAircraft.includes(term)
+  );
+}
+
+function isUavAircraft(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  return ["MQ-9", "REAPER", "WATCHKEEPER", "UAV", "RPAS"].some((term) =>
+    normalisedAircraft.includes(term)
+  );
+}
+
+function getControlPointRoleForAircraft(aircraft = "") {
+  if (isRotaryWingAircraft(aircraft)) {
     return "bp";
   }
 
@@ -810,10 +1044,12 @@ function getRouteTransitDurationMs(pendingCheckIn) {
   const to = pendingCheckIn.routePosition;
   const distanceMetres = getDistanceMetres(from, to);
   const speedMps = getTransitSpeedMps(
-    pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
+    pendingCheckIn.aircraftLabel || pendingCheckIn.aircraft || pendingCheckIn.aircraftId
   );
 
-  return Math.min(120000, Math.max(28000, (distanceMetres / speedMps) * 1000));
+  const realWorldDuration = (distanceMetres / speedMps) * 1000;
+
+  return Math.min(45000, Math.max(20000, realWorldDuration * 0.08));
 }
 
 function getTransitSpeedMps(aircraft = "") {
@@ -857,13 +1093,11 @@ function getInboundStartPosition(routePosition) {
 }
 
 function getDefaultRouteAltitude(aircraft = "") {
-  const normalisedAircraft = aircraft.toUpperCase();
-
-  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+  if (isRotaryWingAircraft(aircraft)) {
     return "1000 FT";
   }
 
-  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
+  if (isUavAircraft(aircraft)) {
     return "18000 FT";
   }
 
@@ -1090,19 +1324,19 @@ function getAltitudeProfile(positionAltitude = "") {
 function getPlatformProfile(aircraft = "") {
   const normalisedAircraft = aircraft.toUpperCase();
 
-  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
+  if (isUavAircraft(aircraft)) {
     return {
       label: "ISR ORBIT",
       path: "uavOrbit",
-      orbitScale: 4.8,
-      speedMps: 46,
+      orbitScale: 1.45,
+      speedMps: 42,
       rotation: 32,
-      drift: 520,
-      standoffMetres: 5200,
+      drift: 110,
+      standoffMetres: 1200,
     };
   }
 
-  if (normalisedAircraft.includes("APACHE")) {
+  if (isRotaryWingAircraft(aircraft)) {
     return {
       label: "HELI PATROL",
       path: "heliPatrol",
@@ -1111,6 +1345,30 @@ function getPlatformProfile(aircraft = "") {
       rotation: 18,
       drift: 90,
       standoffMetres: 1200,
+    };
+  }
+
+  if (normalisedAircraft.includes("A-10")) {
+    return {
+      label: "CAS RACETRACK",
+      path: "fastRacetrack",
+      orbitScale: 3.9,
+      speedMps: 125,
+      rotation: 30,
+      drift: 0,
+      standoffMetres: 6500,
+    };
+  }
+
+  if (normalisedAircraft.includes("AC-130")) {
+    return {
+      label: "GUNSHIP ORBIT",
+      path: "uavOrbit",
+      orbitScale: 3.8,
+      speedMps: 105,
+      rotation: 28,
+      drift: 260,
+      standoffMetres: 4800,
     };
   }
 
@@ -1126,7 +1384,11 @@ function getPlatformProfile(aircraft = "") {
     };
   }
 
-  if (normalisedAircraft.includes("TYPHOON")) {
+  if (
+    ["TYPHOON", "F-16", "F-15", "F/A-18", "FA-18", "RAFALE", "GRIPEN", "TORNADO"].some(
+      (term) => normalisedAircraft.includes(term)
+    )
+  ) {
     return {
       label: "FAST RACETRACK",
       path: "fastRacetrack",

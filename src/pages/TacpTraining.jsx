@@ -370,10 +370,24 @@ function getInboundStartPosition(routePosition) {
   return offsetPosition(routePosition, -42000, -22000);
 }
 
-function getControlPointRoleForAircraft(aircraft = "") {
+function isRotaryWingAircraft(aircraft = "") {
   const normalisedAircraft = aircraft.toUpperCase();
 
-  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+  return ["APACHE", "AH-64", "TIGER", "AH-1", "COBRA", "HELI"].some((term) =>
+    normalisedAircraft.includes(term)
+  );
+}
+
+function isUavAircraft(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  return ["MQ-9", "REAPER", "WATCHKEEPER", "UAV", "RPAS"].some((term) =>
+    normalisedAircraft.includes(term)
+  );
+}
+
+function getControlPointRoleForAircraft(aircraft = "") {
+  if (isRotaryWingAircraft(aircraft)) {
     return "bp";
   }
 
@@ -3240,13 +3254,11 @@ export default function TacpTraining({
 }
 
 function getDefaultRouteAltitude(aircraft = "") {
-  const normalisedAircraft = aircraft.toUpperCase();
-
-  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+  if (isRotaryWingAircraft(aircraft)) {
     return "1000 FT";
   }
 
-  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
+  if (isUavAircraft(aircraft)) {
     return "18000 FT";
   }
 

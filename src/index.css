@@ -28,8 +28,15 @@ body {
   margin: 10px 0;
 }
 
+.routeSelect {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+}
+
 .routeHeightControl select,
-.deconflictionRow select {
+.deconflictionRow select,
+.routeSelect select {
   min-height: 34px;
 }
 
@@ -55,7 +62,7 @@ body {
 
 .deconflictionRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 118px;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, 118px) minmax(112px, 140px);
   gap: 10px;
   align-items: center;
   padding: 8px;
@@ -86,4 +93,59 @@ body {
   margin-top: 3px;
   font-size: 0.78rem;
   opacity: 0.82;
+}
+
+.retryPanel {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid rgba(245, 197, 66, 0.42);
+  background: rgba(52, 39, 4, 0.48);
+}
+
+.stageRetryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 8px;
+}
+
+.stageRetryGrid button {
+  display: grid;
+  gap: 3px;
+  min-height: 54px;
+  padding: 9px;
+  text-align: left;
+}
+
+.stageRetryGrid span {
+  font-weight: 800;
+}
+
+.stageRetryGrid small {
+  opacity: 0.84;
+}
+
+.stageNeedsRepeat {
+  border-color: rgba(245, 197, 66, 0.9);
+  background: rgba(245, 197, 66, 0.18);
+}
+
+.stagePassed {
+  border-color: rgba(0, 255, 102, 0.6);
+  background: rgba(0, 255, 102, 0.12);
+}
+
+.vdlSlewTag {
+  position: absolute;
+  top: 12px;
+  left: 58px;
+  z-index: 5;
+  padding: 3px 7px;
+  border: 1px solid rgba(245, 197, 66, 0.82);
+  background: rgba(20, 15, 2, 0.82);
+  color: #f5c542;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }

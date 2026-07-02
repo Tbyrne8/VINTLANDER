@@ -13,6 +13,62 @@ const aircraftLibrary = {
     playtimeOptions: ["25 MINUTES", "30 MINUTES", "35 MINUTES"],
   },
 
+  f16: {
+    label: "F-16C",
+    numberAndType: "2 X F-16C",
+    callsigns: ["VIPER", "FALCON", "MACE", "HAWK"],
+    ordnanceOptions: [
+      "2 X GBU-12, 20MM",
+      "2 X GBU-38, 20MM",
+      "2 X AGM-65, 20MM",
+    ],
+    capabilities: "SNIPER POD, IR POINTER, ISR, ROVER",
+    altitudeOptions: ["ANGELS 12", "ANGELS 16", "ANGELS 20"],
+    playtimeOptions: ["25 MINUTES", "30 MINUTES", "40 MINUTES"],
+  },
+
+  f15e: {
+    label: "F-15E Strike Eagle",
+    numberAndType: "2 X F-15E",
+    callsigns: ["DUDE", "TIGER", "BOLT", "RAIDER"],
+    ordnanceOptions: [
+      "2 X GBU-31, 2 X GBU-38, 20MM",
+      "4 X GBU-38, 20MM",
+      "2 X GBU-12, 2 X GBU-38, 20MM",
+    ],
+    capabilities: "SNIPER POD, IR POINTER, ISR, ROVER",
+    altitudeOptions: ["ANGELS 16", "ANGELS 20", "ANGELS 24"],
+    playtimeOptions: ["30 MINUTES", "40 MINUTES", "45 MINUTES"],
+  },
+
+  fa18: {
+    label: "F/A-18E Super Hornet",
+    numberAndType: "2 X F/A-18E",
+    callsigns: ["JESTER", "MAVERICK", "RAVEN", "BULLET"],
+    ordnanceOptions: [
+      "2 X GBU-12, 20MM",
+      "2 X GBU-38, 20MM",
+      "2 X AGM-65, 2 X GBU-12, 20MM",
+    ],
+    capabilities: "ATFLIR, IR POINTER, ISR, ROVER",
+    altitudeOptions: ["ANGELS 14", "ANGELS 18", "ANGELS 22"],
+    playtimeOptions: ["25 MINUTES", "35 MINUTES", "45 MINUTES"],
+  },
+
+  a10: {
+    label: "A-10C Thunderbolt II",
+    numberAndType: "2 X A-10C",
+    callsigns: ["HAWG", "SANDY", "BOAR", "WARDOG"],
+    ordnanceOptions: [
+      "2 X GBU-12, ROCKETS, 30MM",
+      "2 X AGM-65, ROCKETS, 30MM",
+      "4 X GBU-38, 30MM",
+    ],
+    capabilities: "LITENING POD, IR POINTER, ISR, ROVER",
+    altitudeOptions: ["ANGELS 8", "ANGELS 12", "ANGELS 16"],
+    playtimeOptions: ["35 MINUTES", "45 MINUTES", "60 MINUTES"],
+  },
+
   f35: {
     label: "F-35A",
     numberAndType: "2 X F-35A",
@@ -25,6 +81,76 @@ const aircraftLibrary = {
     capabilities: "EOTS, ISR, LINK, ROVER",
     altitudeOptions: ["ANGELS 15", "ANGELS 20", "ANGELS 25"],
     playtimeOptions: ["25 MINUTES", "30 MINUTES", "40 MINUTES"],
+  },
+
+  f35b: {
+    label: "F-35B Lightning",
+    numberAndType: "2 X F-35B",
+    callsigns: ["LIGHTNING", "DAGGER", "KNIGHT", "JAVELIN"],
+    ordnanceOptions: [
+      "2 X PAVEWAY IV, INTERNAL GUN",
+      "2 X SPEAR, INTERNAL GUN",
+      "2 X GBU-12, INTERNAL GUN",
+    ],
+    capabilities: "EOTS, ISR, LINK, ROVER",
+    altitudeOptions: ["15000 FT", "20000 FT", "25000 FT"],
+    playtimeOptions: ["25 MINUTES", "30 MINUTES", "40 MINUTES"],
+  },
+
+  rafale: {
+    label: "Rafale",
+    numberAndType: "2 X RAFALE",
+    callsigns: ["MIRAGE", "RAFALE", "RAPIER", "LANCER"],
+    ordnanceOptions: [
+      "2 X AASM, 30MM",
+      "2 X GBU-12, 30MM",
+      "2 X GBU-49, 30MM",
+    ],
+    capabilities: "DAMOCLES POD, IR POINTER, ISR, ROVER",
+    altitudeOptions: ["14000 FT", "18000 FT", "22000 FT"],
+    playtimeOptions: ["25 MINUTES", "35 MINUTES", "45 MINUTES"],
+  },
+
+  gripen: {
+    label: "Gripen",
+    numberAndType: "2 X GRIPEN",
+    callsigns: ["VIKING", "NORDIC", "ARROW", "SPEAR"],
+    ordnanceOptions: [
+      "2 X GBU-12, 27MM",
+      "2 X GBU-49, 27MM",
+      "2 X MAVERICK, 27MM",
+    ],
+    capabilities: "TARGETING POD, IR POINTER, ISR, ROVER",
+    altitudeOptions: ["12000 FT", "16000 FT", "20000 FT"],
+    playtimeOptions: ["25 MINUTES", "30 MINUTES", "40 MINUTES"],
+  },
+
+  tornado: {
+    label: "Tornado IDS",
+    numberAndType: "2 X TORNADO",
+    callsigns: ["TORNADO", "STRIKER", "JAGUAR", "LION"],
+    ordnanceOptions: [
+      "2 X GBU-24, 27MM",
+      "2 X GBU-16, 27MM",
+      "4 X GBU-54, 27MM",
+    ],
+    capabilities: "LITENING POD, IR POINTER, ISR, ROVER",
+    altitudeOptions: ["10000 FT", "14000 FT", "18000 FT"],
+    playtimeOptions: ["25 MINUTES", "35 MINUTES", "45 MINUTES"],
+  },
+
+  harrier: {
+    label: "AV-8B Harrier II",
+    numberAndType: "2 X AV-8B",
+    callsigns: ["JUMPJET", "HARRIER", "STORM", "VADER"],
+    ordnanceOptions: [
+      "2 X GBU-12, 25MM",
+      "2 X AGM-65, 25MM",
+      "ROCKETS, 25MM",
+    ],
+    capabilities: "LITENING POD, IR POINTER, ISR, ROVER",
+    altitudeOptions: ["8000 FT", "12000 FT", "16000 FT"],
+    playtimeOptions: ["20 MINUTES", "30 MINUTES", "35 MINUTES"],
   },
 
   apache: {
@@ -41,6 +167,34 @@ const aircraftLibrary = {
     playtimeOptions: ["20 MINUTES", "25 MINUTES", "30 MINUTES"],
   },
 
+  tiger: {
+    label: "Tiger HAD",
+    numberAndType: "2 X TIGER",
+    callsigns: ["TIGER", "PANTHER", "SCOUT", "LANCE"],
+    ordnanceOptions: [
+      "HELLFIRE, ROCKETS, 30MM",
+      "ROCKETS, 30MM",
+      "SPIKE, ROCKETS, 30MM",
+    ],
+    capabilities: "EO/IR, LASER, ISR",
+    altitudeOptions: ["LOW LEVEL", "500 FT", "1000 FT"],
+    playtimeOptions: ["20 MINUTES", "25 MINUTES", "30 MINUTES"],
+  },
+
+  cobra: {
+    label: "AH-1Z Viper",
+    numberAndType: "2 X AH-1Z",
+    callsigns: ["VENOM", "COBRA", "SNAKE", "GUNFIGHTER"],
+    ordnanceOptions: [
+      "HELLFIRE, ROCKETS, 20MM",
+      "ROCKETS, 20MM",
+      "HELLFIRE, 20MM",
+    ],
+    capabilities: "EO/IR, LASER, ISR",
+    altitudeOptions: ["LOW LEVEL", "500 FT", "1000 FT"],
+    playtimeOptions: ["20 MINUTES", "25 MINUTES", "30 MINUTES"],
+  },
+
   mq9: {
     label: "MQ-9 Reaper",
     numberAndType: "1 X MQ-9",
@@ -53,6 +207,30 @@ const aircraftLibrary = {
     capabilities: "FMV, IR, LASER, ISR, ROVER",
     altitudeOptions: ["ANGELS 18", "ANGELS 20", "ANGELS 22"],
     playtimeOptions: ["4 HOURS", "5 HOURS", "6 HOURS"],
+  },
+
+  watchkeeper: {
+    label: "Watchkeeper",
+    numberAndType: "1 X WATCHKEEPER",
+    callsigns: ["WATCHER", "SABRE", "LOOKOUT", "SENTRY"],
+    ordnanceOptions: ["UNARMED ISR", "UNARMED FMV", "UNARMED LASER DESIGNATOR"],
+    capabilities: "FMV, IR, LASER, ISR, ROVER",
+    altitudeOptions: ["8000 FT", "10000 FT", "12000 FT"],
+    playtimeOptions: ["4 HOURS", "5 HOURS", "6 HOURS"],
+  },
+
+  ac130: {
+    label: "AC-130J Ghostrider",
+    numberAndType: "1 X AC-130J",
+    callsigns: ["SPOOKY", "GHOST", "GUNSHIP", "SHADOW"],
+    ordnanceOptions: [
+      "30MM, 105MM",
+      "30MM, PRECISION GUIDED MUNITIONS",
+      "105MM, PRECISION GUIDED MUNITIONS",
+    ],
+    capabilities: "FMV, IR, LASER, ISR, ROVER",
+    altitudeOptions: ["ANGELS 10", "ANGELS 14", "ANGELS 18"],
+    playtimeOptions: ["60 MINUTES", "90 MINUTES", "120 MINUTES"],
   },
 };
 

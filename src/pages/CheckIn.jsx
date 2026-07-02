@@ -31,6 +31,28 @@ const heightBlockOptions = Array.from({ length: 30 }, (_, index) => {
   const feet = (index + 1) * 1000;
   return `${feet} FT`;
 });
+const checkInStages = [
+  {
+    label: "Aircraft",
+    transmissionIndex: 0,
+    fields: ["aircraftCallsign", "missionNumber", "aircraftNumberType"],
+  },
+  {
+    label: "Position",
+    transmissionIndex: 1,
+    fields: ["positionAltitude", "playtime"],
+  },
+  {
+    label: "Weapons / Sensors",
+    transmissionIndex: 2,
+    fields: ["ordnance", "capabilities", "downlinkCode"],
+  },
+  {
+    label: "Control",
+    transmissionIndex: 3,
+    fields: ["abortCode", "remarks"],
+  },
+];
 
 function loadPendingCheckIn() {
   try {
@@ -266,6 +288,14 @@ export default function CheckIn({
     }, 100);
   }
 
+  function repeatStage(transmissionIndex) {
+    window.speechSynthesis?.cancel();
+    setCurrentTransmission(transmissionIndex);
+    setComplete(false);
+    setResults(null);
+    setVisibleLineCount(0);
+  }
+
   function normalise(value) {
     return value.trim().toUpperCase().replace(/\s+/g, " ");
   }
@@ -354,6 +384,9 @@ export default function CheckIn({
       routedControlPoint: pendingCheckIn?.routedControlPoint,
       routePosition: pendingCheckIn?.routePosition,
       routeAltitude: pendingCheckIn?.routeAltitude,
+      routeStartedAt: pendingCheckIn?.routeStartedAt,
+      routeEstablishedAt: pendingCheckIn?.routeEstablishedAt,
+      inboundStartPosition: pendingCheckIn?.inboundStartPosition,
       anchor: pendingCheckIn?.routePosition,
       extraPlaytimeMinutes: pendingCheckIn?.extraPlaytimeMinutes || 0,
     };
@@ -402,7 +435,22 @@ export default function CheckIn({
       (marked.filter((item) => item.correct).length / marked.length) * 100
     );
 
-    setResults({ marked, score });
+    const stageScores = checkInStages.map((stage) => {
+      const stageMarked = marked.filter((item) => stage.fields.includes(item.field));
+      const correctCount = stageMarked.filter((item) => item.correct).length;
+      const stageScore = stageMarked.length
+        ? Math.round((correctCount / stageMarked.length) * 100)
+        : 0;
+
+      return {
+        ...stage,
+        correctCount,
+        totalCount: stageMarked.length,
+        score: stageScore,
+      };
+    });
+
+    setResults({ marked, score, stageScores });
 
     if (score >= 70) {
       addCheckedInPlatform();
@@ -844,6 +892,25 @@ export default function CheckIn({
         {results && (
           <div className="resultsPanel">
             <h2>CHECK-IN SCORE: {results.score}%</h2>
+            {results.score < 70 && (
+              <div className="retryPanel">
+                <strong>Below 70% - repeat a stage before re-marking.</strong>
+                <div className="stageRetryGrid">
+                  {results.stageScores.map((stage) => (
+                    <button
+                      key={stage.label}
+                      className={stage.score >= 70 ? "stagePassed" : "stageNeedsRepeat"}
+                      onClick={() => repeatStage(stage.transmissionIndex)}
+                    >
+                      <span>{stage.label}</span>
+                      <small>
+                        {stage.correctCount}/{stage.totalCount} correct
+                      </small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {results.marked.map((item) => (
               <div
@@ -892,14 +959,28 @@ function getInboundStartPosition(routePosition) {
   return offsetPosition(routePosition, -42000, -22000);
 }
 
-function getDefaultRouteAltitude(aircraft = "") {
+function isRotaryWingAircraft(aircraft = "") {
   const normalisedAircraft = aircraft.toUpperCase();
 
-  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+  return ["APACHE", "AH-64", "TIGER", "AH-1", "COBRA", "HELI"].some((term) =>
+    normalisedAircraft.includes(term)
+  );
+}
+
+function isUavAircraft(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  return ["MQ-9", "REAPER", "WATCHKEEPER", "UAV", "RPAS"].some((term) =>
+    normalisedAircraft.includes(term)
+  );
+}
+
+function getDefaultRouteAltitude(aircraft = "") {
+  if (isRotaryWingAircraft(aircraft)) {
     return "1000 FT";
   }
 
-  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
+  if (isUavAircraft(aircraft)) {
     return "18000 FT";
   }
 
@@ -936,9 +1017,7 @@ function replaceAltitude(positionAltitude = "", altitude) {
 }
 
 function getControlPointRoleForAircraft(aircraft = "") {
-  const normalisedAircraft = aircraft.toUpperCase();
-
-  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+  if (isRotaryWingAircraft(aircraft)) {
     return "bp";
   }
 
