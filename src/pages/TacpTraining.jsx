@@ -206,6 +206,24 @@ const defaultAttackStatus = {
   linkedBriefId: "",
   effect: "Unknown",
   reattack: "Not assessed",
+  attackRunStartedAt: null,
+  attackRunDurationMs: 90000,
+  bdaAvailableAt: null,
+  bdaDelayMs: 45000,
+};
+
+const defaultAttackBrief = {
+  controlType: "TYPE 2",
+  attackMethod: "BOT",
+  ipBp: "CURRENT HOLD",
+  heading: "AS REQUIRED",
+  distance: "AS REQUIRED",
+  elevation: "UNKNOWN",
+  mark: "TALK-ON",
+  friendlies: "UNKNOWN",
+  egress: "AS DIRECTED",
+  restrictions: "CLEARED HOT ON CONTROL ONLY",
+  remarks: "",
 };
 
 const checkInDeliveryOptions = [
@@ -238,6 +256,25 @@ function getTaskKey(phaseId, taskIndex) {
 
 function getDefaultCallsigns() {
   return ["VINTAGE 10", "VINTAGE 11", "CHAOS 20", "WIDOW 30"];
+}
+
+function getTargetDescription(target) {
+  if (!target) return "NO TARGET SELECTED";
+  return [target.type, target.description].filter(Boolean).join(" - ");
+}
+
+function buildNineLine(brief, target) {
+  return [
+    ["1", "IP/BP", brief.ipBp],
+    ["2", "Heading", brief.heading],
+    ["3", "Distance", brief.distance],
+    ["4", "Target elevation", brief.elevation],
+    ["5", "Target description", getTargetDescription(target)],
+    ["6", "Target location", target ? formatMgrs(target.position) : "NO GRID SAVED"],
+    ["7", "Mark", brief.mark],
+    ["8", "Friendlies", brief.friendlies],
+    ["9", "Egress", brief.egress],
+  ];
 }
 
 function loadSavedValue(key, fallback = null) {
@@ -405,7 +442,9 @@ export default function TacpTraining({
   const [activeView, setActiveView] = useState("trainee");
   const [routePickerOpen, setRoutePickerOpen] = useState(false);
   const [selfSetupComplete, setSelfSetupComplete] = useState(
-    serialVariant !== "self"
+    serialVariant !== "self" ||
+      Boolean(loadSavedValue(savedPendingCheckIn)) ||
+      platforms.length > 0
   );
   const [selfSetup, setSelfSetup] = useState({
     callsign: defaultController.callsign,
@@ -440,6 +479,10 @@ export default function TacpTraining({
   const [intelText, setIntelText] = useState("");
   const [targetInjectType, setTargetInjectType] = useState("vague");
   const [selectedAttackBriefId, setSelectedAttackBriefId] = useState("");
+  const [selectedAttackPlatformId, setSelectedAttackPlatformId] = useState("");
+  const [selectedAttackTargetId, setSelectedAttackTargetId] = useState("");
+  const [attackBriefDraft, setAttackBriefDraft] = useState(defaultAttackBrief);
+  const [attackReadbackState, setAttackReadbackState] = useState("Pending");
   const [checkInDeliveryMode, setCheckInDeliveryMode] = useState("generatedText");
   const [manualCheckIn, setManualCheckIn] = useState({
     callsign: "",
@@ -454,6 +497,7 @@ export default function TacpTraining({
   const [bdaEffect, setBdaEffect] = useState("Target effects unknown");
   const [bdaText, setBdaText] = useState("");
   const [reattackDecision, setReattackDecision] = useState("Await DS decision");
+  const [attackClock, setAttackClock] = useState(Date.now());
   const [situationTemplate, setSituationTemplate] = useState({
     friendlyPosture: situationOptions.friendlyPosture[0],
     enemyActivity: situationOptions.enemyActivity[0],
@@ -492,12 +536,38 @@ export default function TacpTraining({
   }, [activeView]);
 
   useEffect(() => {
+    if (!selectedAttackPlatformId && platforms.length) {
+      setSelectedAttackPlatformId(platforms[0].id);
+    }
+  }, [platforms, selectedAttackPlatformId]);
+
+  useEffect(() => {
+    if (!selectedAttackTargetId && targets.length) {
+      setSelectedAttackTargetId(targets[0].id);
+    }
+  }, [targets, selectedAttackTargetId]);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedAttackBriefs, JSON.stringify(attackBriefs));
+  }, [attackBriefs]);
+
+  useEffect(() => {
     window.localStorage.setItem(savedTargetStatus, JSON.stringify(targetStatus));
   }, [targetStatus]);
 
   useEffect(() => {
     window.localStorage.setItem(savedAttackStatus, JSON.stringify(attackStatus));
   }, [attackStatus]);
+
+  useEffect(() => {
+    if (!attackStatus.attackRunStartedAt && !attackStatus.bdaAvailableAt) {
+      return undefined;
+    }
+
+    const timer = setInterval(() => setAttackClock(Date.now()), 1000);
+
+    return () => clearInterval(timer);
+  }, [attackStatus.attackRunStartedAt, attackStatus.bdaAvailableAt]);
 
   useEffect(() => {
     if (pendingCheckIn) {
@@ -521,8 +591,19 @@ export default function TacpTraining({
   }, [callsigns]);
 
   useEffect(() => {
-    setSelfSetupComplete(serialVariant !== "self");
-  }, [serialVariant]);
+    if (serialVariant !== "self") {
+      setSelfSetupComplete(true);
+      return;
+    }
+
+    setSelfSetupComplete(
+      (current) =>
+        current ||
+        Boolean(loadSavedValue(savedPendingCheckIn)) ||
+        platforms.length > 0 ||
+        Boolean(observerPosition)
+    );
+  }, [observerPosition, platforms.length, serialVariant]);
 
   const aircraftChoices = useMemo(
     () => [
@@ -597,6 +678,27 @@ export default function TacpTraining({
   const linkedAttackBrief = attackBriefs.find(
     (brief) => brief.id === attackStatus.linkedBriefId
   );
+  const selectedAttackPlatform = platforms.find(
+    (platform) => platform.id === selectedAttackPlatformId
+  );
+  const selectedAttackTarget = targets.find(
+    (target) => target.id === selectedAttackTargetId
+  );
+  const attackNineLines = useMemo(
+    () => buildNineLine(attackBriefDraft, selectedAttackTarget),
+    [attackBriefDraft, selectedAttackTarget]
+  );
+  const attackRunEndsAt = attackStatus.attackRunStartedAt
+    ? attackStatus.attackRunStartedAt + (attackStatus.attackRunDurationMs || 90000)
+    : null;
+  const attackRunRemainingMs = attackRunEndsAt
+    ? Math.max(0, attackRunEndsAt - attackClock)
+    : 0;
+  const bdaRemainingMs = attackStatus.bdaAvailableAt
+    ? Math.max(0, attackStatus.bdaAvailableAt - attackClock)
+    : 0;
+  const canSendBda =
+    Boolean(attackStatus.bdaAvailableAt) && bdaRemainingMs === 0;
 
   function updateController(field, value) {
     setController((current) => ({ ...current, [field]: value }));
@@ -1010,6 +1112,74 @@ export default function TacpTraining({
     setLogs((current) => current.filter((log) => log.id !== id));
   }
 
+  function updateAttackBrief(field, value) {
+    setAttackBriefDraft((current) => ({ ...current, [field]: value }));
+    setAttackReadbackState("Pending");
+  }
+
+  function saveSerialAttackBrief() {
+    if (!selectedAttackPlatform || !selectedAttackTarget) {
+      alert("Select a checked-in aircraft and plotted target first.");
+      return;
+    }
+
+    const savedBrief = {
+      id: `ATTACK-${Date.now()}`,
+      createdAt: getTimestamp(),
+      readbackConfirmed: attackReadbackState === "Correct",
+      platform: {
+        callsign: selectedAttackPlatform.callsign,
+        aircraft: selectedAttackPlatform.aircraft,
+        positionAltitude: selectedAttackPlatform.positionAltitude,
+        capabilities: selectedAttackPlatform.capabilities,
+      },
+      target: selectedAttackTarget,
+      brief: attackBriefDraft,
+      lines: attackNineLines,
+    };
+
+    setAttackBriefs((current) => [savedBrief, ...current].slice(0, 12));
+    setSelectedAttackBriefId(savedBrief.id);
+    setAttackStatus((current) => ({
+      ...current,
+      phase: "9-Line passed",
+      linkedBriefId: savedBrief.id,
+      bda: `9-Line passed from ${savedBrief.platform.callsign} onto ${savedBrief.target.id}.`,
+    }));
+    setCompletedTasks((current) => ({
+      ...current,
+      [getTaskKey("attack", 0)]: true,
+    }));
+  }
+
+  function markReadback(state) {
+    setAttackReadbackState(state);
+    if (attackStatus.linkedBriefId) {
+      setAttackBriefs((current) =>
+        current.map((brief) =>
+          brief.id === attackStatus.linkedBriefId
+            ? { ...brief, readbackConfirmed: state === "Correct" }
+            : brief
+        )
+      );
+    }
+    setAttackStatus((current) => ({
+      ...current,
+      phase: state === "Correct" ? "Readback correct" : "9-Line passed",
+      bda:
+        state === "Correct"
+          ? "DS confirmed readback correct."
+          : "DS marked readback incorrect. Re-brief required.",
+    }));
+
+    if (state === "Correct") {
+      setCompletedTasks((current) => ({
+        ...current,
+        [getTaskKey("attack", 1)]: true,
+      }));
+    }
+  }
+
   function linkAttackBrief() {
     if (!selectedAttackBriefId) {
       alert("Select a saved 9-Line first.");
@@ -1028,9 +1198,25 @@ export default function TacpTraining({
         ? `Linked 9-Line for ${selectedBrief.platform.callsign} onto ${selectedBrief.target.id}.`
         : current.bda,
     }));
+    setAttackReadbackState(
+      selectedBrief?.readbackConfirmed ? "Correct" : "Pending"
+    );
   }
 
   function setAttackPhase(phase) {
+    const now = Date.now();
+    const startsAttackRun = phase === "Cleared hot";
+    const attackRunDurationMs = getAttackRunDurationMs(
+      linkedAttackBrief?.platform?.aircraft ||
+        selectedAttackPlatform?.aircraft ||
+        selectedPlatform?.aircraft
+    );
+    const bdaDelayMs = getBdaDelayMs(
+      linkedAttackBrief?.platform?.aircraft ||
+        selectedAttackPlatform?.aircraft ||
+        selectedPlatform?.aircraft
+    );
+
     setAttackStatus((current) => ({
       ...current,
       phase,
@@ -1040,12 +1226,46 @@ export default function TacpTraining({
           : phase === "Abort"
             ? "Abort"
             : phase === "Dry / no drop"
-              ? "Dry / no drop"
-              : current.clearance,
+            ? "Dry / no drop"
+            : current.clearance,
+      attackRunStartedAt: startsAttackRun ? now : current.attackRunStartedAt,
+      attackRunDurationMs: startsAttackRun
+        ? attackRunDurationMs
+        : current.attackRunDurationMs,
+      bdaAvailableAt: startsAttackRun
+        ? now + attackRunDurationMs + bdaDelayMs
+        : ["Abort", "Dry / no drop"].includes(phase)
+          ? null
+          : current.bdaAvailableAt,
+      bdaDelayMs: startsAttackRun ? bdaDelayMs : current.bdaDelayMs,
+      bda:
+        startsAttackRun
+          ? `Cleared hot. Attack run in progress; BDA expected in ${formatCountdown(attackRunDurationMs + bdaDelayMs)}.`
+          : current.bda,
     }));
+
+    if (["Cleared hot", "Abort", "Dry / no drop"].includes(phase)) {
+      setCompletedTasks((current) => ({
+        ...current,
+        [getTaskKey("attack", 2)]: true,
+      }));
+    }
+
+    if (["Effects observed", "Re-attack required"].includes(phase)) {
+      setCompletedTasks((current) => ({
+        ...current,
+        [getTaskKey("effects", 0)]: true,
+        [getTaskKey("effects", 1)]: phase === "Re-attack required" || current[getTaskKey("effects", 1)],
+      }));
+    }
   }
 
   function sendPlatformBda() {
+    if (!canSendBda) {
+      alert(`BDA not available yet. Wait ${formatCountdown(bdaRemainingMs)}.`);
+      return;
+    }
+
     const platformCallsign =
       linkedAttackBrief?.platform?.callsign ||
       selectedPlatform?.callsign ||
@@ -1058,8 +1278,102 @@ export default function TacpTraining({
       bda,
       effect: bdaEffect,
       reattack: reattackDecision,
+      bdaAvailableAt: null,
+    }));
+    setCompletedTasks((current) => ({
+      ...current,
+      [getTaskKey("effects", 0)]: true,
+      [getTaskKey("effects", 1)]: true,
     }));
     setBdaText("");
+  }
+
+  function autoSelfLedReadback() {
+    if (!attackStatus.linkedBriefId) {
+      if (!selectedAttackPlatform || !selectedAttackTarget) {
+        alert("Select a checked-in aircraft and plotted target first.");
+        return;
+      }
+
+      const savedBrief = {
+        id: `ATTACK-${Date.now()}`,
+        createdAt: getTimestamp(),
+        readbackConfirmed: true,
+        platform: {
+          callsign: selectedAttackPlatform.callsign,
+          aircraft: selectedAttackPlatform.aircraft,
+          positionAltitude: selectedAttackPlatform.positionAltitude,
+          capabilities: selectedAttackPlatform.capabilities,
+        },
+        target: selectedAttackTarget,
+        brief: attackBriefDraft,
+        lines: attackNineLines,
+      };
+
+      setAttackBriefs((current) => [savedBrief, ...current].slice(0, 12));
+      setSelectedAttackBriefId(savedBrief.id);
+      setAttackReadbackState("Correct");
+      setAttackStatus((current) => ({
+        ...current,
+        phase: "Readback correct",
+        linkedBriefId: savedBrief.id,
+        bda: `Auto DS confirmed readback for ${savedBrief.platform.callsign} onto ${savedBrief.target.id}.`,
+      }));
+      setCompletedTasks((current) => ({
+        ...current,
+        [getTaskKey("attack", 0)]: true,
+        [getTaskKey("attack", 1)]: true,
+      }));
+      return;
+    }
+
+    markReadback("Correct");
+  }
+
+  function autoSelfLedClearance() {
+    if (!attackStatus.linkedBriefId) {
+      if (!selectedAttackPlatform || !selectedAttackTarget) {
+        alert("Select a checked-in aircraft and plotted target first.");
+        return;
+      }
+
+      autoSelfLedReadback();
+    } else if (attackReadbackState !== "Correct") {
+      markReadback("Correct");
+    }
+
+    setAttackPhase("Cleared hot");
+  }
+
+  function autoSelfLedBda() {
+    if (!canSendBda) {
+      alert(`BDA not available yet. Wait ${formatCountdown(bdaRemainingMs)}.`);
+      return;
+    }
+
+    const platformCallsign =
+      linkedAttackBrief?.platform?.callsign ||
+      selectedAttackPlatform?.callsign ||
+      selectedPlatform?.callsign ||
+      "Aircraft";
+    const targetId =
+      linkedAttackBrief?.target?.id || selectedAttackTarget?.id || "target";
+    const bda = `${platformCallsign}: Target effects observed on ${targetId}. No re-attack required.`;
+
+    setAttackStatus((current) => ({
+      ...current,
+      phase: "Effects observed",
+      bda,
+      effect: "Target hit",
+      reattack: "No re-attack required",
+      bdaAvailableAt: null,
+    }));
+    setCompletedTasks((current) => ({
+      ...current,
+      [getTaskKey("effects", 0)]: true,
+      [getTaskKey("effects", 1)]: true,
+      [getTaskKey("effects", 2)]: true,
+    }));
   }
 
   function routePendingAircraft(point) {
@@ -1633,6 +1947,18 @@ export default function TacpTraining({
             <strong>{attackStatus.clearance}</strong>
           </div>
           <div className="dataRow">
+            <span>Strike timing</span>
+            <strong>
+              {attackRunRemainingMs > 0
+                ? `Attack run ${formatCountdown(attackRunRemainingMs)}`
+                  : bdaRemainingMs > 0
+                    ? `BDA in ${formatCountdown(bdaRemainingMs)}`
+                    : attackStatus.bdaAvailableAt
+                      ? "BDA available"
+                    : "Awaiting clearance"}
+            </strong>
+          </div>
+          <div className="dataRow">
             <span>Linked 9-Line</span>
             <strong>
               {linkedAttackBrief
@@ -1644,6 +1970,256 @@ export default function TacpTraining({
             <small>Platform BDA</small>
             <p>{attackStatus.bda}</p>
           </div>
+        </div>
+      </section>
+
+      <section className="briefGrid serialAttackGrid">
+        <div className="card briefBuilder">
+          <h2>Attack Phase</h2>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              Aircraft
+              <select
+                value={selectedAttackPlatformId}
+                onChange={(event) =>
+                  setSelectedAttackPlatformId(event.target.value)
+                }
+              >
+                {!platforms.length && (
+                  <option value="">No checked-in aircraft</option>
+                )}
+                {platforms.map((platform) => (
+                  <option key={platform.id} value={platform.id}>
+                    {platform.callsign} - {platform.aircraft}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              Target
+              <select
+                value={selectedAttackTargetId}
+                onChange={(event) =>
+                  setSelectedAttackTargetId(event.target.value)
+                }
+              >
+                {!targets.length && <option value="">No plotted targets</option>}
+                {targets.map((target) => (
+                  <option key={target.id} value={target.id}>
+                    {target.id} - {target.description || target.type}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              Control type
+              <select
+                value={attackBriefDraft.controlType}
+                onChange={(event) =>
+                  updateAttackBrief("controlType", event.target.value)
+                }
+              >
+                <option>TYPE 1</option>
+                <option>TYPE 2</option>
+                <option>TYPE 3</option>
+              </select>
+            </label>
+
+            <label className="field">
+              Attack method
+              <select
+                value={attackBriefDraft.attackMethod}
+                onChange={(event) =>
+                  updateAttackBrief("attackMethod", event.target.value)
+                }
+              >
+                <option>BOT</option>
+                <option>BOC</option>
+                <option>SEAD</option>
+                <option>SHOW OF FORCE</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              IP / BP
+              <input
+                value={attackBriefDraft.ipBp}
+                onChange={(event) =>
+                  updateAttackBrief("ipBp", event.target.value.toUpperCase())
+                }
+              />
+            </label>
+
+            <label className="field">
+              Mark
+              <select
+                value={attackBriefDraft.mark}
+                onChange={(event) => updateAttackBrief("mark", event.target.value)}
+              >
+                <option>TALK-ON</option>
+                <option>LASER</option>
+                <option>IR POINTER</option>
+                <option>SMOKE</option>
+                <option>NONE</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              Heading
+              <input
+                value={attackBriefDraft.heading}
+                onChange={(event) =>
+                  updateAttackBrief("heading", event.target.value.toUpperCase())
+                }
+              />
+            </label>
+
+            <label className="field">
+              Distance
+              <input
+                value={attackBriefDraft.distance}
+                onChange={(event) =>
+                  updateAttackBrief("distance", event.target.value.toUpperCase())
+                }
+              />
+            </label>
+          </div>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              Target elevation
+              <input
+                value={attackBriefDraft.elevation}
+                onChange={(event) =>
+                  updateAttackBrief("elevation", event.target.value.toUpperCase())
+                }
+              />
+            </label>
+
+            <label className="field">
+              Egress
+              <input
+                value={attackBriefDraft.egress}
+                onChange={(event) =>
+                  updateAttackBrief("egress", event.target.value.toUpperCase())
+                }
+              />
+            </label>
+          </div>
+
+          <label className="field">
+            Friendlies
+            <input
+              value={attackBriefDraft.friendlies}
+              onChange={(event) =>
+                updateAttackBrief("friendlies", event.target.value.toUpperCase())
+              }
+            />
+          </label>
+
+          <label className="field">
+            Restrictions
+            <textarea
+              value={attackBriefDraft.restrictions}
+              onChange={(event) =>
+                updateAttackBrief("restrictions", event.target.value)
+              }
+            />
+          </label>
+
+          <label className="field">
+            Remarks
+            <textarea
+              value={attackBriefDraft.remarks}
+              onChange={(event) =>
+                updateAttackBrief("remarks", event.target.value)
+              }
+              placeholder="Threats, final attack heading, abort code, laser code, TOT..."
+            />
+          </label>
+
+          <div className="briefActions">
+            <button onClick={saveSerialAttackBrief}>Pass / Save 9-Line</button>
+            <button onClick={() => onNavigate("nine")}>Open Full 9-Line</button>
+          </div>
+        </div>
+
+        <div className="card briefPreview">
+          <h2>Live Attack Card</h2>
+
+          <div className="dataRow">
+            <span>Aircraft</span>
+            <strong>
+              {selectedAttackPlatform
+                ? `${selectedAttackPlatform.callsign} / ${selectedAttackPlatform.aircraft}`
+                : "NONE"}
+            </strong>
+          </div>
+          <div className="dataRow">
+            <span>Target</span>
+            <strong>
+              {selectedAttackTarget
+                ? `${selectedAttackTarget.id} / ${formatMgrs(selectedAttackTarget.position)}`
+                : "NONE"}
+            </strong>
+          </div>
+          <div className="dataRow">
+            <span>Readback</span>
+            <strong>{attackReadbackState}</strong>
+          </div>
+          <div className="dataRow">
+            <span>Clearance</span>
+            <strong>{attackStatus.clearance}</strong>
+          </div>
+
+          <div className="nineLineList">
+            {attackNineLines.map(([number, label, value]) => (
+              <article key={label} className="lineCard">
+                <span>{number}</span>
+                <div>
+                  <small>{label}</small>
+                  <strong>{value || "UNKNOWN"}</strong>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="serialCard">
+            <small>Effects / BDA received</small>
+            <p>
+              {attackStatus.phase} / {attackStatus.bda}
+            </p>
+          </div>
+
+          {serialVariant === "self" && (
+            <div className="serialCard">
+              <small>Self-led auto DS</small>
+              <p>
+                Use these controls to emulate DS readback, clearance and aircraft BDA
+                during a solo serial.
+              </p>
+              <div className="briefActions">
+                <button onClick={autoSelfLedReadback}>Auto Readback Correct</button>
+                <button onClick={autoSelfLedClearance}>Auto Cleared Hot</button>
+                <button disabled={!canSendBda} onClick={autoSelfLedBda}>
+                  {canSendBda
+                    ? "Auto Platform BDA"
+                    : attackStatus.bdaAvailableAt
+                      ? `BDA ${formatCountdown(bdaRemainingMs)}`
+                      : "BDA locked"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -2343,6 +2919,18 @@ export default function TacpTraining({
                 <span>Clearance</span>
                 <strong>{attackStatus.clearance}</strong>
               </div>
+              <div className="dataRow">
+                <span>Strike timing</span>
+                <strong>
+                  {attackRunRemainingMs > 0
+                    ? `Attack run ${formatCountdown(attackRunRemainingMs)}`
+                      : bdaRemainingMs > 0
+                        ? `BDA in ${formatCountdown(bdaRemainingMs)}`
+                        : attackStatus.bdaAvailableAt
+                          ? "BDA available"
+                        : "Awaiting clearance"}
+                </strong>
+              </div>
 
               <div className="serialCard">
                 <small>DS View</small>
@@ -2403,6 +2991,34 @@ export default function TacpTraining({
 
               <button onClick={linkAttackBrief}>Link 9-Line To Serial</button>
 
+              {linkedAttackBrief && (
+                <div className="serialCard linkedNineLineCard">
+                  <small>
+                    Linked 9-Line / {linkedAttackBrief.platform.callsign} onto{" "}
+                    {linkedAttackBrief.target.id}
+                  </small>
+                  <div className="nineLineList compactNineLineList">
+                    {linkedAttackBrief.lines.map(([number, label, value]) => (
+                      <article key={`${number}-${label}`} className="lineCard">
+                        <span>{number}</span>
+                        <div>
+                          <small>{label}</small>
+                          <strong>{value || "UNKNOWN"}</strong>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="briefActions">
+                    <button onClick={() => markReadback("Correct")}>
+                      Readback Correct
+                    </button>
+                    <button onClick={() => markReadback("Incorrect")}>
+                      Readback Incorrect
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="targetStatusGrid attackStatusGrid">
                 {attackStatuses.map((status) => (
                   <button
@@ -2458,7 +3074,13 @@ export default function TacpTraining({
                 />
               </label>
 
-              <button onClick={sendPlatformBda}>Send BDA As Platform</button>
+              <button disabled={!canSendBda} onClick={sendPlatformBda}>
+                {canSendBda
+                  ? "Send BDA As Platform"
+                  : attackStatus.bdaAvailableAt
+                    ? `BDA available in ${formatCountdown(bdaRemainingMs)}`
+                    : "BDA locked until clearance"}
+              </button>
             </div>
           </section>
 
@@ -2658,4 +3280,42 @@ function replaceAltitude(positionAltitude = "", altitude) {
   }
 
   return `${positionAltitude}, ${altitude}`;
+}
+
+function getAttackRunDurationMs(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+    return 75000;
+  }
+
+  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
+    return 120000;
+  }
+
+  return 90000;
+}
+
+function getBdaDelayMs(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+    return 30000;
+  }
+
+  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
+    return 60000;
+  }
+
+  return 45000;
+}
+
+function formatCountdown(milliseconds = 0) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes <= 0) return `${seconds}s`;
+
+  return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
 }
