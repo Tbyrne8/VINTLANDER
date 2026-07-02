@@ -490,6 +490,47 @@ select {
   cursor: pointer;
 }
 
+.inlineActions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.inlineActions button {
+  width: auto;
+  padding: 6px 8px;
+  border: 1px solid #4c634c;
+  border-radius: 6px;
+  background: #263626;
+  color: #ffffff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tableActions {
+  justify-content: flex-start;
+  min-width: 92px;
+}
+
+.timeWarning {
+  background: rgba(245, 197, 66, 0.14);
+}
+
+.timeWarning td,
+.timeWarning strong {
+  color: #ffe08a;
+}
+
+.timeCritical {
+  background: rgba(255, 90, 90, 0.18);
+}
+
+.timeCritical td,
+.timeCritical strong {
+  color: #ffb4a0;
+}
+
 .tacticalPopupOverlay {
   position: fixed;
   inset: 0;

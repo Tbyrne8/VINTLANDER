@@ -20,6 +20,7 @@ const savedAttackBriefs = "vintlander.attackBriefs";
 const savedAttackStatus = "vintlander.attackStatus";
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
 const savedControlPoints = "vintlander.controlPoints";
+const defaultMapPosition = { lat: 51.38466954999258, lng: -2.3747654912984433 };
 
 const serialPhases = [
   {
@@ -265,9 +266,15 @@ function getPlaytimeMinutes(playtime = "") {
 }
 
 function formatPlaytime(platform) {
-  const totalMinutes = getPlaytimeMinutes(platform.playtime);
+  const baseMinutes = getPlaytimeMinutes(platform.playtime);
+  const totalMinutes =
+    baseMinutes === null ? null : baseMinutes + (platform.extraPlaytimeMinutes || 0);
 
   if (!platform.checkedInAt || totalMinutes === null) {
+    if (platform.extraPlaytimeMinutes) {
+      return `PLUS ${platform.extraPlaytimeMinutes} MIN / NOT CHECKED IN`;
+    }
+
     return platform.playtime || "UNKNOWN";
   }
 
@@ -278,6 +285,31 @@ function formatPlaytime(platform) {
   const remainingMinutes = Math.max(0, totalMinutes - elapsedMinutes);
 
   return `${remainingMinutes} MIN REM / ${platform.playtime}`;
+}
+
+function getRemainingPlaytimeMinutes(platform) {
+  const baseMinutes = getPlaytimeMinutes(platform.playtime);
+  const totalMinutes =
+    baseMinutes === null ? null : baseMinutes + (platform.extraPlaytimeMinutes || 0);
+
+  if (!platform.checkedInAt || totalMinutes === null) return null;
+
+  const elapsedMinutes = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(platform.checkedInAt).getTime()) / 60000)
+  );
+
+  return Math.max(0, totalMinutes - elapsedMinutes);
+}
+
+function getPlaytimeClass(platform) {
+  const remainingMinutes = getRemainingPlaytimeMinutes(platform);
+
+  if (remainingMinutes === null) return "";
+  if (remainingMinutes <= 5) return "timeCritical";
+  if (remainingMinutes <= 10) return "timeWarning";
+
+  return "";
 }
 
 function formatCheckInTime(checkedInAt) {
@@ -320,6 +352,7 @@ function parseMgrs(value) {
 
 export default function TacpTraining({
   platforms = [],
+  setPlatforms = () => {},
   onNavigate = () => {},
   serialMode = false,
   onExitSerial = () => {},
@@ -458,7 +491,32 @@ export default function TacpTraining({
     []
   );
 
-  const selectedPlatform = null;
+  const selectedPlatform = platforms[0] || null;
+  const aircraftRows = useMemo(() => {
+    const pendingRows = pendingCheckIn
+      ? [
+          {
+            id: pendingCheckIn.id,
+            callsign: "PENDING",
+            aircraft: pendingCheckIn.aircraftLabel,
+            positionAltitude:
+              pendingCheckIn.routeStatus || "AWAITING TROOP ROUTE",
+            playtime: pendingCheckIn.playtime || "NOT CHECKED IN",
+            checkedInAt: null,
+            downlinkCode: "PENDING",
+            capabilities: pendingCheckIn.deliveryLabel || "Pending check-in",
+            status: pendingCheckIn.routedControlPoint
+              ? "ROUTED / AWAITING CHECK-IN"
+              : "AWAITING ROUTE",
+            routeStatus: pendingCheckIn.routeStatus || "Awaiting troop route",
+            extraPlaytimeMinutes: pendingCheckIn.extraPlaytimeMinutes || 0,
+            isPending: true,
+          },
+        ]
+      : [];
+
+    return [...pendingRows, ...platforms];
+  }, [pendingCheckIn, platforms]);
   const selectedAircraftLabel =
     aircraftChoices.find((aircraft) => aircraft.id === selectedAircraft)?.label ||
     "Random aircraft";
@@ -491,7 +549,7 @@ export default function TacpTraining({
   const completedCount = Object.values(completedTasks).filter(Boolean).length;
   const progress = Math.round((completedCount / totalTasks) * 100);
   const latestIntel = intelInjects[0];
-  const mapCenter = observerPosition || targets[0]?.position || { lat: 51.5072, lng: -0.1276 };
+  const mapCenter = observerPosition || targets[0]?.position || defaultMapPosition;
   const linkedAttackBrief = attackBriefs.find(
     (brief) => brief.id === attackStatus.linkedBriefId
   );
@@ -559,6 +617,7 @@ export default function TacpTraining({
       route: "Awaiting troop route to an IP/BP before check-in.",
       routeStatus: "AWAITING TROOP ROUTE",
       routedControlPoint: null,
+      extraPlaytimeMinutes: 0,
       routedAt: null,
     };
 
@@ -804,6 +863,33 @@ export default function TacpTraining({
 
     setPendingCheckIn(updatedTasking);
     setRoutePickerOpen(false);
+  }
+
+  function addPendingAircraftTime(minutes) {
+    if (!pendingCheckIn) return;
+
+    setPendingCheckIn((current) => ({
+      ...current,
+      extraPlaytimeMinutes: (current.extraPlaytimeMinutes || 0) + minutes,
+    }));
+  }
+
+  function addPlatformTime(platformId, minutes) {
+    setPlatforms((currentPlatforms) =>
+      currentPlatforms.map((platform) =>
+        platform.id === platformId
+          ? {
+              ...platform,
+              extraPlaytimeMinutes:
+                (platform.extraPlaytimeMinutes || 0) + minutes,
+              status:
+                platform.status === "CHECKED IN"
+                  ? `CHECKED IN / PLUS ${minutes} MIN`
+                  : platform.status,
+            }
+          : platform
+      )
+    );
   }
 
   return (
@@ -1804,15 +1890,41 @@ export default function TacpTraining({
           <section className="trainingGrid">
             <div className="card serialSnapshot">
               <h2>Aircraft Deconfliction</h2>
-              {platforms.length === 0 ? (
-                <p className="emptyText">No checked-in aircraft.</p>
+              {aircraftRows.length === 0 ? (
+                <p className="emptyText">No aircraft pushed or checked in.</p>
               ) : (
-                platforms.map((platform) => (
-                  <div key={platform.id} className="dataRow">
-                    <span>{platform.callsign}</span>
+                aircraftRows.map((platform) => (
+                  <div
+                    key={platform.id}
+                    className={`dataRow ${getPlaytimeClass(platform)}`}
+                  >
+                    <span>
+                      {platform.callsign} / {platform.status}
+                    </span>
                     <strong>
-                      {platform.aircraft} / {platform.positionAltitude}
+                      {platform.aircraft} /{" "}
+                      {formatPlatformAltitude(platform.positionAltitude)}
                     </strong>
+                    <div className="inlineActions">
+                      <button
+                        onClick={() =>
+                          platform.isPending
+                            ? addPendingAircraftTime(5)
+                            : addPlatformTime(platform.id, 5)
+                        }
+                      >
+                        +5 Min
+                      </button>
+                      <button
+                        onClick={() =>
+                          platform.isPending
+                            ? addPendingAircraftTime(15)
+                            : addPlatformTime(platform.id, 15)
+                        }
+                      >
+                        +15 Min
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -1865,8 +1977,8 @@ export default function TacpTraining({
         <section className="card platformTableCard">
           <h2>Live Aircraft / Check-In Details</h2>
 
-          {platforms.length === 0 ? (
-            <p className="emptyText">No aircraft checked in yet.</p>
+          {aircraftRows.length === 0 ? (
+            <p className="emptyText">No aircraft pushed or checked in yet.</p>
           ) : (
             <div className="platformTableWrap">
               <table className="platformTable">
@@ -1881,11 +1993,12 @@ export default function TacpTraining({
                     <th>Capabilities</th>
                     <th>Status</th>
                     <th>Route</th>
+                    <th>DS Time</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {platforms.map((platform) => (
-                    <tr key={platform.id}>
+                  {aircraftRows.map((platform) => (
+                    <tr key={platform.id} className={getPlaytimeClass(platform)}>
                       <td>{platform.callsign}</td>
                       <td>{platform.aircraft}</td>
                       <td>{formatPlatformAltitude(platform.positionAltitude)}</td>
@@ -1895,6 +2008,28 @@ export default function TacpTraining({
                       <td>{platform.capabilities}</td>
                       <td>{platform.status}</td>
                       <td>{platform.routeStatus || platform.route || "Not set"}</td>
+                      <td>
+                        <div className="inlineActions tableActions">
+                          <button
+                            onClick={() =>
+                              platform.isPending
+                                ? addPendingAircraftTime(5)
+                                : addPlatformTime(platform.id, 5)
+                            }
+                          >
+                            +5
+                          </button>
+                          <button
+                            onClick={() =>
+                              platform.isPending
+                                ? addPendingAircraftTime(15)
+                                : addPlatformTime(platform.id, 15)
+                            }
+                          >
+                            +15
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

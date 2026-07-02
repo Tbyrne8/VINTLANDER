@@ -23,6 +23,7 @@ const savedTargets = "vintlander.targets";
 const savedObserverPosition = "vintlander.observerPosition";
 const savedControlPoints = "vintlander.controlPoints";
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
+const defaultMapPosition = { lat: 51.38466954999258, lng: -2.3747654912984433 };
 
 function SerialWorkflowNav({ onNavigate }) {
   return (
@@ -78,7 +79,7 @@ export default function MapTrainer({
   serialMode = false,
 }) {
   const [mgrsInput, setMgrsInput] = useState("");
-  const [position, setPosition] = useState({ lat: 51.5072, lng: -0.1276 });
+  const [position, setPosition] = useState(defaultMapPosition);
   const [mapType, setMapType] = useState("satellite");
   const [zoom, setZoom] = useState(13);
   const [mapResetKey, setMapResetKey] = useState(0);

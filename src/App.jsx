@@ -118,6 +118,7 @@ export default function App() {
         {page === "tacp" && (
           <TacpTraining
             platforms={platforms}
+            setPlatforms={setPlatforms}
             onNavigate={goToPage}
             serialMode={serialMode}
             onExitSerial={exitSerial}

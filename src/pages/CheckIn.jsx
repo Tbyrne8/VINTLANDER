@@ -293,6 +293,7 @@ export default function CheckIn({
       routeStatus: pendingCheckIn?.routeStatus,
       routedControlPoint: pendingCheckIn?.routedControlPoint,
       routePosition: pendingCheckIn?.routePosition,
+      extraPlaytimeMinutes: pendingCheckIn?.extraPlaytimeMinutes || 0,
     };
 
     setPlatforms((currentPlatforms) => [
