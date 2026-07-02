@@ -4,6 +4,7 @@ import {
   getAircraftOptions,
 } from "../utils/checkInGenerator.js";
 import { markCheckInField } from "../utils/checkInMarking.js";
+import { formatMgrs } from "../utils/mgrs.js";
 
 const blankCheckIn = {
   aircraftCallsign: "",
@@ -26,6 +27,10 @@ const deliveryOptions = [
   { id: "generatedRadio", label: "Generated radio voice" },
   { id: "dsVoice", label: "DS local voice" },
 ];
+const heightBlockOptions = Array.from({ length: 30 }, (_, index) => {
+  const feet = (index + 1) * 1000;
+  return `${feet} FT`;
+});
 
 function loadPendingCheckIn() {
   try {
@@ -62,9 +67,15 @@ function applyRouteToScenario(generatedScenario, pendingCheckIn) {
   if (!routeLabel) return generatedScenario;
 
   const altitude =
+    pendingCheckIn.routeAltitude ||
     generatedScenario.correctCheckIn.positionAltitude.split(",")[1]?.trim() ||
     generatedScenario.correctCheckIn.positionAltitude;
-  const positionAltitude = `HOLDING ${routeLabel}, ${altitude}`;
+  const routePhrase = pendingCheckIn.routeEstablishedAt
+    ? `ESTABLISHED IN ${routeLabel}`
+    : pendingCheckIn.clearanceRequested
+    ? `REQUESTING CLEARANCE TO ${routeLabel}`
+    : `ROUTING TO ${routeLabel}`;
+  const positionAltitude = `${routePhrase}, ${altitude}`;
 
   return {
     ...generatedScenario,
@@ -78,12 +89,20 @@ function applyRouteToScenario(generatedScenario, pendingCheckIn) {
       return {
         ...transmission,
         lines: [
-          `CURRENTLY HOLDING ${routeLabel}.`,
+          pendingCheckIn.routeEstablishedAt
+            ? `ESTABLISHED IN ${routeLabel}.`
+            : pendingCheckIn.clearanceRequested
+            ? `REQUESTING CLEARANCE TO ${routeLabel}.`
+            : `ROUTING TO ${routeLabel}.`,
           ...transmission.lines.slice(1),
         ],
         voiceLines: transmission.voiceLines
           ? [
-              `CURRENTLY HOLDING ${routeLabel}.`,
+              pendingCheckIn.routeEstablishedAt
+                ? `ESTABLISHED IN ${routeLabel}.`
+                : pendingCheckIn.clearanceRequested
+                ? `REQUESTING CLEARANCE TO ${routeLabel}.`
+                : `ROUTING TO ${routeLabel}.`,
               ...transmission.voiceLines.slice(1),
             ]
           : undefined,
@@ -255,10 +274,23 @@ export default function CheckIn({
     if (!pendingCheckIn) return;
 
     const routeLabel = formatControlPointLabel(point);
+    const routeType = getControlPointRoleForAircraft(
+      pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
+    );
+
+    if (point.type !== routeType) {
+      alert(
+        `${pendingCheckIn.aircraftLabel || "This aircraft"} should be routed to a ${routeType.toUpperCase()}.`
+      );
+      return;
+    }
+
     const updatedTasking = {
       ...pendingCheckIn,
-      route: `Route complete. Aircraft holding ${routeLabel} at briefed height block.`,
-      routeStatus: `HOLDING ${routeLabel}`,
+      route: `Aircraft cleared to ${routeLabel}. Await established call.`,
+      routeStatus: `ROUTING TO ${routeLabel}`,
+      clearanceRequested: false,
+      routeEstablishedAt: null,
       routedControlPoint: {
         id: point.id,
         type: point.type,
@@ -268,6 +300,9 @@ export default function CheckIn({
         mgrs: point.mgrs,
       },
       routePosition: point.position,
+      routeAltitude: pendingCheckIn.routeAltitude || getDefaultRouteAltitude(
+        pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
+      ),
       routeStartedAt: Date.now(),
       inboundStartPosition: getInboundStartPosition(point.position),
       routedAt: new Date().toLocaleTimeString(),
@@ -276,6 +311,31 @@ export default function CheckIn({
     window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(updatedTasking));
     setPendingCheckIn(updatedTasking);
     setRoutePickerOpen(false);
+  }
+
+  function updatePendingRouteAltitude(altitude) {
+    if (!pendingCheckIn) return;
+
+    const updatedTasking = {
+      ...pendingCheckIn,
+      routeAltitude: altitude,
+    };
+
+    window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(updatedTasking));
+    setPendingCheckIn(updatedTasking);
+  }
+
+  function updatePlatformHeight(platformId, altitude) {
+    setPlatforms((currentPlatforms) =>
+      currentPlatforms.map((platform) =>
+        platform.id === platformId
+          ? {
+              ...platform,
+              positionAltitude: replaceAltitude(platform.positionAltitude, altitude),
+            }
+          : platform
+      )
+    );
   }
 
   function addCheckedInPlatform() {
@@ -293,6 +353,8 @@ export default function CheckIn({
       routeStatus: pendingCheckIn?.routeStatus,
       routedControlPoint: pendingCheckIn?.routedControlPoint,
       routePosition: pendingCheckIn?.routePosition,
+      routeAltitude: pendingCheckIn?.routeAltitude,
+      anchor: pendingCheckIn?.routePosition,
       extraPlaytimeMinutes: pendingCheckIn?.extraPlaytimeMinutes || 0,
     };
 
@@ -553,19 +615,85 @@ export default function CheckIn({
                   No IP/BP available. Open the map to add or receive one.
                 </p>
               ) : (
+                <>
+                <div className="routeHeightControl">
+                  <label>
+                    Requested height block
+                    <select
+                      value={
+                        pendingCheckIn?.routeAltitude ||
+                        getDefaultRouteAltitude(
+                          pendingCheckIn?.aircraftLabel || pendingCheckIn?.aircraftId
+                        )
+                      }
+                      onChange={(event) =>
+                        updatePendingRouteAltitude(event.target.value)
+                      }
+                    >
+                      {heightBlockOptions.map((altitude) => (
+                        <option key={altitude} value={altitude}>
+                          {altitude}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
                 <div className="routePickerGrid">
-                  {controlPoints.map((point) => (
+                  {getRouteableControlPoints(
+                    controlPoints,
+                    pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
+                  ).map((point) => (
                     <button
                       key={point.id}
                       className="routePickerOption"
                       onClick={() => routePendingAircraft(point)}
                     >
                       <strong>{formatControlPointLabel(point)}</strong>
-                      <span>{point.mgrs || "Grid not stored"}</span>
+                      <span>{formatMgrs(point.position)}</span>
                     </button>
                   ))}
                 </div>
+                </>
               )}
+
+              <div className="deconflictionPanel">
+                <h3>Airspace Deconfliction</h3>
+                {platforms.length === 0 ? (
+                  <p className="emptyText">No checked-in aircraft on station.</p>
+                ) : (
+                  <div className="deconflictionList">
+                    {platforms.map((platform) => (
+                      <div key={platform.id} className="deconflictionRow">
+                        <div>
+                          <strong>{platform.callsign}</strong>
+                          <span>{platform.aircraft}</span>
+                          <small>
+                            {platform.routedControlPoint?.label || "NO IP/BP"} /{" "}
+                            {platform.routePosition
+                              ? formatMgrs(platform.routePosition)
+                              : "GRID NOT SET"}
+                          </small>
+                        </div>
+                        <label>
+                          Height
+                          <select
+                            value={extractHeightBlock(platform.positionAltitude)}
+                            onChange={(event) =>
+                              updatePlatformHeight(platform.id, event.target.value)
+                            }
+                          >
+                            {heightBlockOptions.map((altitude) => (
+                              <option key={altitude} value={altitude}>
+                                {altitude}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <button
                 className="secondaryAction"
@@ -761,7 +889,67 @@ export default function CheckIn({
 }
 
 function getInboundStartPosition(routePosition) {
-  return offsetPosition(routePosition, -18000, -9000);
+  return offsetPosition(routePosition, -42000, -22000);
+}
+
+function getDefaultRouteAltitude(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+    return "1000 FT";
+  }
+
+  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
+    return "18000 FT";
+  }
+
+  return "15000 FT";
+}
+
+function extractHeightBlock(positionAltitude = "") {
+  const feetMatch = positionAltitude.match(/(\d{3,5})\s*FT/i);
+  const angelsMatch = positionAltitude.match(/ANGELS\s*(\d+)/i);
+
+  if (feetMatch) {
+    const rounded = Math.max(1000, Math.round(Number(feetMatch[1]) / 1000) * 1000);
+    return `${Math.min(30000, rounded)} FT`;
+  }
+
+  if (angelsMatch) {
+    return `${Math.min(30000, Number(angelsMatch[1]) * 1000)} FT`;
+  }
+
+  return "1000 FT";
+}
+
+function replaceAltitude(positionAltitude = "", altitude) {
+  if (!positionAltitude) return altitude;
+
+  if (/ANGELS\s*\d+|\d{3,5}\s*FT|LOW LEVEL/i.test(positionAltitude)) {
+    return positionAltitude.replace(
+      /ANGELS\s*\d+|\d{3,5}\s*FT|LOW LEVEL/i,
+      altitude
+    );
+  }
+
+  return `${positionAltitude}, ${altitude}`;
+}
+
+function getControlPointRoleForAircraft(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+    return "bp";
+  }
+
+  return "ip";
+}
+
+function getRouteableControlPoints(controlPoints, aircraft = "") {
+  const preferredType = getControlPointRoleForAircraft(aircraft);
+  const preferredPoints = controlPoints.filter((point) => point.type === preferredType);
+
+  return preferredPoints.length > 0 ? preferredPoints : controlPoints;
 }
 
 function offsetPosition(center, eastMetres, northMetres) {

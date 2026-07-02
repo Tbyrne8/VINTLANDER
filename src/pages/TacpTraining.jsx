@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Map } from "@vis.gl/react-google-maps";
 import * as mgrs from "mgrs";
+import { formatMgrs, parseMgrs } from "../utils/mgrs.js";
 import {
   generateCheckIn,
   getAircraftOptions,
@@ -20,7 +21,13 @@ const savedAttackBriefs = "vintlander.attackBriefs";
 const savedAttackStatus = "vintlander.attackStatus";
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
 const savedControlPoints = "vintlander.controlPoints";
+const savedOpHistory = "vintlander.opHistory";
+const savedMapCenter = "vintlander.mapCenter";
 const defaultMapPosition = { lat: 51.38466954999258, lng: -2.3747654912984433 };
+const heightBlockOptions = Array.from({ length: 30 }, (_, index) => {
+  const feet = (index + 1) * 1000;
+  return `${feet} FT`;
+});
 
 const serialPhases = [
   {
@@ -242,14 +249,6 @@ function loadSavedValue(key, fallback = null) {
   }
 }
 
-function formatMgrs(position) {
-  if (!position) return "NOT SET";
-
-  return mgrs
-    .forward([position.lng, position.lat])
-    .replace(/^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/, "$1 $2 $3 $4");
-}
-
 function formatPlatformAltitude(positionAltitude = "") {
   return positionAltitude.replace(/ANGELS\s*(\d+)/gi, (_, angels) => {
     return `${Number(angels) * 1000} FT`;
@@ -331,7 +330,24 @@ function formatControlPointLabel(point) {
 }
 
 function getInboundStartPosition(routePosition) {
-  return offsetPosition(routePosition, -18000, -9000);
+  return offsetPosition(routePosition, -42000, -22000);
+}
+
+function getControlPointRoleForAircraft(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+    return "bp";
+  }
+
+  return "ip";
+}
+
+function getRouteableControlPoints(controlPoints, aircraft = "") {
+  const preferredType = getControlPointRoleForAircraft(aircraft);
+  const preferredPoints = controlPoints.filter((point) => point.type === preferredType);
+
+  return preferredPoints.length > 0 ? preferredPoints : controlPoints;
 }
 
 function offsetPosition(center, eastMetres, northMetres) {
@@ -345,16 +361,12 @@ function offsetPosition(center, eastMetres, northMetres) {
   };
 }
 
-function parseMgrs(value) {
-  const [lng, lat] = mgrs.toPoint(value.replace(/\s+/g, "").trim());
-  return { lat, lng };
-}
-
 export default function TacpTraining({
   platforms = [],
   setPlatforms = () => {},
   onNavigate = () => {},
   serialMode = false,
+  serialVariant = "ds",
   onExitSerial = () => {},
 }) {
   const [logs, setLogs] = useState(() => loadSavedList(savedTrainingLogs));
@@ -383,12 +395,36 @@ export default function TacpTraining({
   const [controlPoints, setControlPoints] = useState(() =>
     loadSavedList(savedControlPoints)
   );
+  const [opHistory, setOpHistory] = useState(() =>
+    loadSavedList(savedOpHistory)
+  );
   const [selectedAircraft, setSelectedAircraft] = useState("random");
   const [completedTasks, setCompletedTasks] = useState({});
   const [controller, setController] = useState(defaultController);
   const [debrief, setDebrief] = useState("");
   const [activeView, setActiveView] = useState("trainee");
   const [routePickerOpen, setRoutePickerOpen] = useState(false);
+  const [selfSetupComplete, setSelfSetupComplete] = useState(
+    serialVariant !== "self"
+  );
+  const [selfSetup, setSelfSetup] = useState({
+    callsign: defaultController.callsign,
+    situationUpdate:
+      "Exercising troop established for a self-led serial. Enemy activity reported in the training area.",
+    friendlies: defaultController.friendlies,
+    threats: defaultController.threats,
+    restrictions: defaultController.restrictions,
+    targetDevelopment:
+      "Use map trainer and ISR to search, designate and confirm targets after check-in.",
+    threatSelections: [defaultController.threats],
+    opName: "OP 1",
+    savedOpId: "",
+    opGrid: "",
+    controlPointGrid: "",
+    controlPointType: "ip",
+    controlPointName: "COD",
+  });
+  const [selfSetupControlPoints, setSelfSetupControlPoints] = useState([]);
   const [callsigns, setCallsigns] = useState(() => {
     const saved = loadSavedList(savedCallsigns);
     return saved.length ? saved : getDefaultCallsigns();
@@ -477,8 +513,16 @@ export default function TacpTraining({
   }, [controlPoints]);
 
   useEffect(() => {
+    window.localStorage.setItem(savedOpHistory, JSON.stringify(opHistory));
+  }, [opHistory]);
+
+  useEffect(() => {
     window.localStorage.setItem(savedCallsigns, JSON.stringify(callsigns));
   }, [callsigns]);
+
+  useEffect(() => {
+    setSelfSetupComplete(serialVariant !== "self");
+  }, [serialVariant]);
 
   const aircraftChoices = useMemo(
     () => [
@@ -576,6 +620,113 @@ export default function TacpTraining({
     setSituationTemplate((current) => ({ ...current, [field]: value }));
   }
 
+  function updateSelfSetup(field, value) {
+    setSelfSetup((current) => ({ ...current, [field]: value }));
+  }
+
+  function addSelfCallsign() {
+    const callsign = newCallsign.trim().toUpperCase();
+
+    if (!callsign) return;
+
+    setCallsigns((current) =>
+      current.includes(callsign) ? current : [...current, callsign].slice(-20)
+    );
+    updateSelfSetup("callsign", callsign);
+    setNewCallsign("");
+  }
+
+  function toggleSelfThreat(threat) {
+    setSelfSetup((current) => {
+      const selectedThreats = new Set(current.threatSelections || []);
+
+      if (selectedThreats.has(threat)) {
+        selectedThreats.delete(threat);
+      } else {
+        selectedThreats.add(threat);
+      }
+
+      const threatSelections = [...selectedThreats];
+
+      return {
+        ...current,
+        threatSelections,
+        threats: threatSelections.join(" "),
+      };
+    });
+  }
+
+  function selectSavedOp(opId) {
+    const selectedOp = opHistory.find((op) => op.id === opId);
+
+    setSelfSetup((current) => ({
+      ...current,
+      savedOpId: opId,
+      opName: selectedOp?.name || current.opName,
+      opGrid: selectedOp?.mgrs || current.opGrid,
+    }));
+  }
+
+  function buildSelfControlPoint() {
+    const position = parseMgrs(selfSetup.controlPointGrid);
+    const type = selfSetup.controlPointType;
+    const labelType = type.toUpperCase();
+    const existingCount =
+      selfSetupControlPoints.filter((point) => point.type === type).length +
+      controlPoints.filter((point) => point.type === type).length +
+      1;
+    const name = selfSetup.controlPointName.trim() || `${labelType} ${existingCount}`;
+
+    return {
+      id: `${labelType}-${Date.now()}`,
+      type,
+      name,
+      position,
+      mgrs: mgrs.forward([position.lng, position.lat]),
+      createdAt: getTimestamp(),
+      source: "Self-led setup",
+    };
+  }
+
+  function addSelfControlPoint() {
+    try {
+      const point = buildSelfControlPoint();
+      setSelfSetupControlPoints((current) => [...current, point]);
+      updateSelfSetup("controlPointGrid", "");
+      updateSelfSetup("controlPointName", "");
+    } catch {
+      alert("Check the IP/BP MGRS grid before adding it.");
+    }
+  }
+
+  function deleteSelfControlPoint(pointId) {
+    setSelfSetupControlPoints((current) =>
+      current.filter((point) => point.id !== pointId)
+    );
+  }
+
+  function rememberOp(name, position) {
+    const opName = name.trim() || `OP ${opHistory.length + 1}`;
+    const opGrid = formatMgrs(position);
+
+    setOpHistory((current) => {
+      const withoutDuplicate = current.filter(
+        (op) => op.mgrs !== opGrid && op.name.toUpperCase() !== opName.toUpperCase()
+      );
+
+      return [
+        {
+          id: `OP-${Date.now()}`,
+          name: opName.toUpperCase(),
+          mgrs: opGrid,
+          position,
+          createdAt: getTimestamp(),
+        },
+        ...withoutDuplicate,
+      ].slice(0, 12);
+    });
+  }
+
   function pushSituationUpdate() {
     setController((current) => ({
       ...current,
@@ -624,6 +775,77 @@ export default function TacpTraining({
     setPendingCheckIn(tasking);
   }
 
+  function startSelfLedGeneratedSerial() {
+    try {
+      const opPosition = parseMgrs(selfSetup.opGrid);
+      const setupControlPoints =
+        selfSetupControlPoints.length > 0
+          ? selfSetupControlPoints
+          : [buildSelfControlPoint()];
+      const availableAircraft = getAircraftOptions();
+      const resolvedAircraft =
+        selectedAircraft === "random"
+          ? availableAircraft[Math.floor(Math.random() * availableAircraft.length)]
+          : availableAircraft.find(
+              (aircraft) => aircraft.id === selectedAircraft.replace("type:", "")
+            );
+      const aircraftId = resolvedAircraft?.id || "typhoon";
+      const aircraftLabel = resolvedAircraft?.label || "Typhoon";
+      const tasking = {
+        id: `CHECKIN-${Date.now()}`,
+        aircraftId,
+        aircraftLabel,
+        controllerCallsign:
+          selfSetup.callsign.trim().toUpperCase() || defaultController.callsign,
+        deliveryMode: "generatedText",
+        deliveryLabel: "Generated text",
+        manualScenario: null,
+        pushedAt: getTimestamp(),
+        route: "Aircraft awaiting signaller route to the correct IP/BP.",
+        routeStatus: `REQUESTING ROUTE TO ${getControlPointRoleForAircraft(aircraftLabel).toUpperCase()}`,
+        clearanceRequested: true,
+        routedControlPoint: null,
+        routePosition: null,
+        routeStartedAt: null,
+        inboundStartPosition: null,
+        extraPlaytimeMinutes: 0,
+        routedAt: null,
+      };
+
+      setObserverPosition(opPosition);
+      window.localStorage.setItem(savedObserverPosition, JSON.stringify(opPosition));
+      window.localStorage.setItem(savedMapCenter, JSON.stringify(opPosition));
+      rememberOp(selfSetup.opName, opPosition);
+      setControlPoints(setupControlPoints);
+      window.localStorage.setItem(
+        savedControlPoints,
+        JSON.stringify(setupControlPoints)
+      );
+      setController((current) => ({
+        ...current,
+        callsign: selfSetup.callsign.trim().toUpperCase() || current.callsign,
+        situationUpdate: selfSetup.situationUpdate,
+        friendlies: selfSetup.friendlies,
+        threats: selfSetup.threats,
+        restrictions: selfSetup.restrictions,
+        targetDevelopment: selfSetup.targetDevelopment,
+        opTasking: `OP set during self-led setup: ${formatMgrs(opPosition)}.`,
+      }));
+      setTargetStatus({
+        phase: "OP plotted",
+        notes: `Self-led setup complete. OP ${formatMgrs(opPosition)} and ${setupControlPoints.length} IP/BP ready.`,
+        completed: ["OP plotted"],
+        intelAlert: false,
+      });
+      window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(tasking));
+      setPendingCheckIn(tasking);
+      setSelfSetupComplete(true);
+      onNavigate("checkin");
+    } catch {
+      alert("Check the OP and IP/BP MGRS grids before starting the serial.");
+    }
+  }
+
   function saveDsControlPoint() {
     try {
       const position = parseMgrs(controlPointGrid);
@@ -659,6 +881,7 @@ export default function TacpTraining({
     try {
       const position = parseMgrs(opGrid);
       setObserverPosition(position);
+      rememberOp(`OP ${opHistory.length + 1}`, position);
       setController((current) => ({
         ...current,
         opTasking: `OP pushed by DS: ${formatMgrs(position)}. Confirm placement on map.`,
@@ -843,10 +1066,23 @@ export default function TacpTraining({
     if (!pendingCheckIn) return;
 
     const routeLabel = formatControlPointLabel(point);
+    const routeType = getControlPointRoleForAircraft(
+      pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
+    );
+
+    if (point.type !== routeType) {
+      alert(
+        `${pendingCheckIn.aircraftLabel || "This aircraft"} should be routed to a ${routeType.toUpperCase()}.`
+      );
+      return;
+    }
+
     const updatedTasking = {
       ...pendingCheckIn,
-      route: `Route complete. Aircraft holding ${routeLabel} at briefed height block.`,
-      routeStatus: `HOLDING ${routeLabel}`,
+      route: `Aircraft cleared to ${routeLabel}. Await established call.`,
+      routeStatus: `ROUTING TO ${routeLabel}`,
+      clearanceRequested: false,
+      routeEstablishedAt: null,
       routedControlPoint: {
         id: point.id,
         type: point.type,
@@ -856,6 +1092,9 @@ export default function TacpTraining({
         mgrs: point.mgrs,
       },
       routePosition: point.position,
+      routeAltitude: pendingCheckIn.routeAltitude || getDefaultRouteAltitude(
+        pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
+      ),
       routeStartedAt: Date.now(),
       inboundStartPosition: getInboundStartPosition(point.position),
       routedAt: getTimestamp(),
@@ -863,6 +1102,28 @@ export default function TacpTraining({
 
     setPendingCheckIn(updatedTasking);
     setRoutePickerOpen(false);
+  }
+
+  function updatePendingRouteAltitude(altitude) {
+    if (!pendingCheckIn) return;
+
+    setPendingCheckIn((current) => ({
+      ...current,
+      routeAltitude: altitude,
+    }));
+  }
+
+  function updatePlatformHeight(platformId, altitude) {
+    setPlatforms((currentPlatforms) =>
+      currentPlatforms.map((platform) =>
+        platform.id === platformId
+          ? {
+              ...platform,
+              positionAltitude: replaceAltitude(platform.positionAltitude, altitude),
+            }
+          : platform
+      )
+    );
   }
 
   function addPendingAircraftTime(minutes) {
@@ -889,6 +1150,251 @@ export default function TacpTraining({
             }
           : platform
       )
+    );
+  }
+
+  if (serialMode && serialVariant === "self" && !selfSetupComplete) {
+    return (
+      <main className="page trainingPage">
+        <header className="pageHeader">
+          <div>
+            <h1>Self-Led Serial Setup</h1>
+            <p>
+              Build the ground picture and control points first, then launch
+              straight into an auto-generated check-in.
+            </p>
+          </div>
+          <div className="headerActions">
+            <span className="statusPill">SELF-LED SETUP</span>
+            <button onClick={onExitSerial}>Exit To Main Menu</button>
+          </div>
+        </header>
+
+        <section className="card selfSetupCard">
+          <h2>Serial Details</h2>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              Callsign
+              <select
+                value={selfSetup.callsign}
+                onChange={(event) =>
+                  updateSelfSetup("callsign", event.target.value.toUpperCase())
+                }
+              >
+                {callsigns.map((callsign) => (
+                  <option key={callsign} value={callsign}>
+                    {callsign}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              Aircraft / platform
+              <select
+                value={selectedAircraft}
+                onChange={(event) => setSelectedAircraft(event.target.value)}
+              >
+                {aircraftChoices.map((aircraft) => (
+                  <option key={aircraft.id} value={aircraft.id}>
+                    {aircraft.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              Add callsign
+              <input
+                value={newCallsign}
+                onChange={(event) =>
+                  setNewCallsign(event.target.value.toUpperCase())
+                }
+                placeholder="Example: VINTAGE 12"
+              />
+            </label>
+            <button onClick={addSelfCallsign}>Add Callsign</button>
+          </div>
+
+          <label className="field">
+            Situation update
+            <textarea
+              value={selfSetup.situationUpdate}
+              onChange={(event) =>
+                updateSelfSetup("situationUpdate", event.target.value)
+              }
+            />
+          </label>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              Friendly situation
+              <textarea
+                value={selfSetup.friendlies}
+                onChange={(event) =>
+                  updateSelfSetup("friendlies", event.target.value)
+                }
+              />
+            </label>
+
+            <label className="field">
+              Threats
+              <select value="" onChange={(event) => toggleSelfThreat(event.target.value)}>
+                <option value="">Add threat</option>
+                {situationOptions.threatType.map((threat) => (
+                  <option key={threat}>{threat}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="targetStatusGrid">
+            {(selfSetup.threatSelections || []).map((threat) => (
+              <button
+                key={threat}
+                className="activeMode"
+                onClick={() => toggleSelfThreat(threat)}
+              >
+                {threat}
+              </button>
+            ))}
+          </div>
+
+          <label className="field">
+            Restrictions
+            <textarea
+              value={selfSetup.restrictions}
+              onChange={(event) =>
+                updateSelfSetup("restrictions", event.target.value)
+              }
+            />
+          </label>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              Saved OP
+              <select
+                value={selfSetup.savedOpId}
+                onChange={(event) => selectSavedOp(event.target.value)}
+              >
+                <option value="">Manual OP grid</option>
+                {opHistory.map((op) => (
+                  <option key={op.id} value={op.id}>
+                    {op.name} / {op.mgrs}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              OP name
+              <input
+                value={selfSetup.opName}
+                onChange={(event) =>
+                  updateSelfSetup("opName", event.target.value.toUpperCase())
+                }
+                placeholder="OP 1"
+              />
+            </label>
+          </div>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              OP MGRS
+              <input
+                value={selfSetup.opGrid}
+                onChange={(event) =>
+                  updateSelfSetup("opGrid", event.target.value.toUpperCase())
+                }
+                placeholder="Example: 30U WB 43508 92788"
+              />
+            </label>
+
+            <label className="field">
+              IP/BP MGRS
+              <input
+                value={selfSetup.controlPointGrid}
+                onChange={(event) =>
+                  updateSelfSetup(
+                    "controlPointGrid",
+                    event.target.value.toUpperCase()
+                  )
+                }
+                placeholder="Example: 30U WB 43508 92788"
+              />
+            </label>
+          </div>
+
+          <div className="grid compactGrid">
+            <label className="field">
+              IP/BP type
+              <select
+                value={selfSetup.controlPointType}
+                onChange={(event) =>
+                  updateSelfSetup("controlPointType", event.target.value)
+                }
+              >
+                <option value="ip">IP</option>
+                <option value="bp">BP</option>
+              </select>
+            </label>
+
+            <label className="field">
+              IP/BP name
+              <input
+                value={selfSetup.controlPointName}
+                onChange={(event) =>
+                  updateSelfSetup(
+                    "controlPointName",
+                    event.target.value.toUpperCase()
+                  )
+                }
+                placeholder="COD"
+              />
+            </label>
+          </div>
+
+          <div className="briefActions">
+            <button onClick={addSelfControlPoint}>Add IP/BP To Serial</button>
+          </div>
+
+          {selfSetupControlPoints.length > 0 && (
+            <div className="targetIntelList">
+              {selfSetupControlPoints.map((point, index) => (
+                <div key={point.id} className="dataRow">
+                  <span>{formatControlPointLabel(point)}</span>
+                  <strong>{index === 0 ? "INITIAL ROUTE" : point.type.toUpperCase()}</strong>
+                  <button
+                    className="removeControlPoint"
+                    onClick={() => deleteSelfControlPoint(point.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <label className="field">
+            Target development tasking
+            <textarea
+              value={selfSetup.targetDevelopment}
+              onChange={(event) =>
+                updateSelfSetup("targetDevelopment", event.target.value)
+              }
+            />
+          </label>
+
+          <div className="briefActions">
+            <button onClick={startSelfLedGeneratedSerial}>
+              Auto Push Aircraft And Start Check-In
+            </button>
+          </div>
+        </section>
+      </main>
     );
   }
 
@@ -1051,7 +1557,10 @@ export default function TacpTraining({
             {controlPoints.length > 0 && (
               <div className="serialCard">
                 <small>IP / BP available</small>
-                {controlPoints.map((point) => (
+                {getRouteableControlPoints(
+                  controlPoints,
+                  pendingCheckIn?.aircraftLabel || pendingCheckIn?.aircraftId
+                ).map((point) => (
                   <p key={point.id}>
                     {point.name} / {point.type.toUpperCase()} / {formatMgrs(point.position)}
                   </p>
@@ -1154,19 +1663,85 @@ export default function TacpTraining({
                 No IP/BP available. Open the map to add or receive one.
               </p>
             ) : (
+              <>
+              <div className="routeHeightControl">
+                <label>
+                  Requested height block
+                  <select
+                    value={
+                      pendingCheckIn?.routeAltitude ||
+                      getDefaultRouteAltitude(
+                        pendingCheckIn?.aircraftLabel || pendingCheckIn?.aircraftId
+                      )
+                    }
+                    onChange={(event) =>
+                      updatePendingRouteAltitude(event.target.value)
+                    }
+                  >
+                    {heightBlockOptions.map((altitude) => (
+                      <option key={altitude} value={altitude}>
+                        {altitude}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <div className="routePickerGrid">
-                {controlPoints.map((point) => (
+                {getRouteableControlPoints(
+                  controlPoints,
+                  pendingCheckIn?.aircraftLabel || pendingCheckIn?.aircraftId
+                ).map((point) => (
                   <button
                     key={point.id}
                     className="routePickerOption"
                     onClick={() => routePendingAircraft(point)}
                   >
                     <strong>{formatControlPointLabel(point)}</strong>
-                    <span>{point.mgrs || formatMgrs(point.position)}</span>
+                    <span>{formatMgrs(point.position)}</span>
                   </button>
                 ))}
               </div>
+              </>
             )}
+
+            <div className="deconflictionPanel">
+              <h3>Airspace Deconfliction</h3>
+              {platforms.length === 0 ? (
+                <p className="emptyText">No checked-in aircraft on station.</p>
+              ) : (
+                <div className="deconflictionList">
+                  {platforms.map((platform) => (
+                    <div key={platform.id} className="deconflictionRow">
+                      <div>
+                        <strong>{platform.callsign}</strong>
+                        <span>{platform.aircraft}</span>
+                        <small>
+                          {platform.routedControlPoint?.label || "NO IP/BP"} /{" "}
+                          {platform.routePosition
+                            ? formatMgrs(platform.routePosition)
+                            : "GRID NOT SET"}
+                        </small>
+                      </div>
+                      <label>
+                        Height
+                        <select
+                          value={extractHeightBlock(platform.positionAltitude)}
+                          onChange={(event) =>
+                            updatePlatformHeight(platform.id, event.target.value)
+                          }
+                        >
+                          {heightBlockOptions.map((altitude) => (
+                            <option key={altitude} value={altitude}>
+                              {altitude}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <button
               className="secondaryAction"
@@ -2040,4 +2615,47 @@ export default function TacpTraining({
       )}
     </main>
   );
+}
+
+function getDefaultRouteAltitude(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+    return "1000 FT";
+  }
+
+  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
+    return "18000 FT";
+  }
+
+  return "15000 FT";
+}
+
+function extractHeightBlock(positionAltitude = "") {
+  const feetMatch = positionAltitude.match(/(\d{3,5})\s*FT/i);
+  const angelsMatch = positionAltitude.match(/ANGELS\s*(\d+)/i);
+
+  if (feetMatch) {
+    const rounded = Math.max(1000, Math.round(Number(feetMatch[1]) / 1000) * 1000);
+    return `${Math.min(30000, rounded)} FT`;
+  }
+
+  if (angelsMatch) {
+    return `${Math.min(30000, Number(angelsMatch[1]) * 1000)} FT`;
+  }
+
+  return "1000 FT";
+}
+
+function replaceAltitude(positionAltitude = "", altitude) {
+  if (!positionAltitude) return altitude;
+
+  if (/ANGELS\s*\d+|\d{3,5}\s*FT|LOW LEVEL/i.test(positionAltitude)) {
+    return positionAltitude.replace(
+      /ANGELS\s*\d+|\d{3,5}\s*FT|LOW LEVEL/i,
+      altitude
+    );
+  }
+
+  return `${positionAltitude}, ${altitude}`;
 }

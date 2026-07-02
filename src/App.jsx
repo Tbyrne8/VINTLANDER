@@ -45,6 +45,7 @@ function loadSavedPlatforms() {
 export default function App() {
   const [page, setPage] = useState("home");
   const [serialMode, setSerialMode] = useState(false);
+  const [serialVariant, setSerialVariant] = useState("ds");
   const [platforms, setPlatforms] = useState(loadSavedPlatforms);
 
   useEffect(() => {
@@ -56,6 +57,13 @@ export default function App() {
   }
 
   function startFullSerial() {
+    setSerialVariant("ds");
+    setSerialMode(true);
+    setPage("tacp");
+  }
+
+  function startSelfLedSerial() {
+    setSerialVariant("self");
     setSerialMode(true);
     setPage("tacp");
   }
@@ -71,6 +79,7 @@ export default function App() {
     }
 
     setSerialMode(false);
+    setSerialVariant("ds");
     setPage("home");
   }
 
@@ -100,7 +109,9 @@ export default function App() {
 
         {serialMode && page !== "tacp" && (
           <div className="serialBar">
-            <strong>FULL SERIAL</strong>
+            <strong>
+              {serialVariant === "self" ? "SELF-LED SERIAL" : "FULL SERIAL"}
+            </strong>
             <div>
               <button onClick={() => goToPage("tacp")}>Return To Mission</button>
               <button onClick={exitSerial}>Exit To Main Menu</button>
@@ -112,6 +123,7 @@ export default function App() {
           <Home
             onNavigate={goToPage}
             onStartSerial={startFullSerial}
+            onStartSelfLedSerial={startSelfLedSerial}
             onClearTrainingData={clearTrainingData}
           />
         )}
@@ -121,6 +133,7 @@ export default function App() {
             setPlatforms={setPlatforms}
             onNavigate={goToPage}
             serialMode={serialMode}
+            serialVariant={serialVariant}
             onExitSerial={exitSerial}
           />
         )}

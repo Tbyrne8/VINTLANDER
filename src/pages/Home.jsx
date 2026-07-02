@@ -1,6 +1,7 @@
 export default function Home({
   onNavigate,
   onStartSerial,
+  onStartSelfLedSerial,
   onClearTrainingData,
 }) {
   return (
@@ -17,6 +18,17 @@ export default function Home({
           </p>
         </div>
         <button onClick={onStartSerial}>Start Full Serial</button>
+      </section>
+
+      <section className="homeHero card">
+        <div>
+          <h2>Self-Led Full Serial</h2>
+          <p>
+            Set the situation, OP and IP/BP grids first, then launch straight
+            into an auto-generated aircraft check-in without a live DS.
+          </p>
+        </div>
+        <button onClick={onStartSelfLedSerial}>Start Self-Led Serial</button>
       </section>
 
       <div className="grid homeLauncherGrid">

@@ -154,7 +154,7 @@ export default function IsrFeed({
     );
 
     if (platform) {
-      setOrbitAnchor(position);
+      setOrbitAnchor(platform.routePosition || platform.anchor || position);
       setUnlockedPlatform(platform);
       return;
     }

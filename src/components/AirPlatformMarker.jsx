@@ -6,18 +6,20 @@ function makeAirPlatformIcon(platform) {
   const silhouette = getAircraftSilhouette(aircraftType);
 
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="104" height="82" viewBox="0 0 104 82">
-      <circle cx="52" cy="34" r="27" fill="#071108" fill-opacity="0.78" stroke="${silhouette.colour}" stroke-width="2"/>
+    <svg xmlns="http://www.w3.org/2000/svg" width="112" height="76" viewBox="0 0 112 76">
+      <path d="M56 4 L63 13 L56 22 L49 13 Z" fill="${silhouette.colour}" fill-opacity="0.92"/>
       ${silhouette.markup}
-      <circle cx="52" cy="34" r="4" fill="#00ff66" fill-opacity="0.9"/>
-      <rect x="20" y="62" width="64" height="16" rx="3" fill="#071108" fill-opacity="0.9" stroke="${silhouette.colour}"/>
-      <text x="52" y="74" font-size="9" fill="white" text-anchor="middle" font-family="Arial" font-weight="700">${label}</text>
+      <circle cx="56" cy="36" r="3" fill="#00ff66"/>
+      <line x1="56" y1="16" x2="56" y2="62" stroke="${silhouette.colour}" stroke-width="1" stroke-opacity="0.45" stroke-dasharray="3 4"/>
+      <line x1="26" y1="36" x2="86" y2="36" stroke="${silhouette.colour}" stroke-width="1" stroke-opacity="0.45" stroke-dasharray="3 4"/>
+      <rect x="22" y="60" width="68" height="14" rx="2" fill="#061208" fill-opacity="0.88" stroke="${silhouette.colour}" stroke-width="1"/>
+      <text x="56" y="70" font-size="8.5" fill="white" text-anchor="middle" font-family="Arial" font-weight="800">${label}</text>
     </svg>
   `;
 
   return {
     url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
-    anchor: { x: 52, y: 34 },
+    anchor: { x: 56, y: 36 },
   };
 }
 
@@ -40,27 +42,25 @@ function getAircraftSilhouette(type) {
     uav: {
       colour: "#00ff66",
       markup: `
-        <path d="M50 12 L54 12 L57 32 L91 36 L91 40 L57 39 L55 53 L67 58 L67 62 L52 58 L37 62 L37 58 L49 53 L47 39 L13 40 L13 36 L47 32 Z" fill="#dfffdc" stroke="#071108" stroke-width="1.2"/>
+        <path d="M54 17 L58 17 L61 34 L100 37 L100 40 L61 41 L59 51 L73 57 L73 60 L56 55 L39 60 L39 57 L53 51 L51 41 L12 40 L12 37 L51 34 Z" fill="#dfffdc" stroke="#061208" stroke-width="1.1"/>
       `,
     },
     helicopter: {
       colour: "#f5c542",
       markup: `
-        <line x1="17" y1="24" x2="87" y2="24" stroke="#f5c542" stroke-width="4" stroke-linecap="round"/>
-        <line x1="52" y1="8" x2="52" y2="40" stroke="#f5c542" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
-        <circle cx="52" cy="24" r="5" fill="#dfffdc" stroke="#071108" stroke-width="1.2"/>
-        <path d="M39 33 C39 26 44 22 52 22 C60 22 65 26 65 33 L62 49 C61 54 57 57 52 57 C47 57 43 54 42 49 Z" fill="#dfffdc" stroke="#071108" stroke-width="1.4"/>
-        <path d="M52 56 L52 68" stroke="#dfffdc" stroke-width="5" stroke-linecap="round"/>
-        <path d="M44 66 L60 66" stroke="#f5c542" stroke-width="3" stroke-linecap="round"/>
-        <path d="M42 42 L32 48 M62 42 L72 48" stroke="#dfffdc" stroke-width="3" stroke-linecap="round"/>
+        <ellipse cx="56" cy="29" rx="40" ry="5" fill="none" stroke="#f5c542" stroke-width="2.2" stroke-opacity="0.85"/>
+        <line x1="56" y1="15" x2="56" y2="43" stroke="#f5c542" stroke-width="2" stroke-linecap="round"/>
+        <path d="M40 38 C40 30 47 27 56 27 C65 27 72 30 72 38 L69 49 C68 54 63 57 56 57 C49 57 44 54 43 49 Z" fill="#dfffdc" stroke="#061208" stroke-width="1.3"/>
+        <path d="M56 55 L56 66 M46 66 L66 66" stroke="#dfffdc" stroke-width="3" stroke-linecap="round"/>
+        <path d="M72 42 L91 48 L91 52 L71 49" fill="#dfffdc" stroke="#061208" stroke-width="1.1"/>
       `,
     },
     fastJet: {
       colour: "#7ec8ff",
       markup: `
-        <path d="M52 8 L61 39 L91 54 L91 60 L57 52 L52 62 L47 52 L13 60 L13 54 L43 39 Z" fill="#dfffdc" stroke="#071108" stroke-width="1.3"/>
-        <path d="M45 37 L52 17 L59 37 Z" fill="#7ec8ff" fill-opacity="0.9"/>
-        <path d="M47 52 L52 45 L57 52 L52 58 Z" fill="#071108" fill-opacity="0.5"/>
+        <path d="M56 9 L66 41 L102 58 L102 63 L61 53 L56 64 L51 53 L10 63 L10 58 L46 41 Z" fill="#dfffdc" stroke="#061208" stroke-width="1.2"/>
+        <path d="M49 39 L56 18 L63 39 Z" fill="#7ec8ff" fill-opacity="0.88"/>
+        <path d="M51 52 L56 45 L61 52 L56 59 Z" fill="#061208" fill-opacity="0.45"/>
       `,
     },
   };

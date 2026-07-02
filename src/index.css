@@ -21,3 +21,69 @@ body {
 #root {
   min-height: 100vh;
 }
+
+.routeHeightControl {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.routeHeightControl select,
+.deconflictionRow select {
+  min-height: 34px;
+}
+
+.deconflictionPanel {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.deconflictionPanel h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.deconflictionList {
+  display: grid;
+  gap: 8px;
+}
+
+.deconflictionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 118px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid rgba(143, 216, 255, 0.22);
+  background: rgba(5, 15, 10, 0.72);
+}
+
+.deconflictionRow div,
+.deconflictionRow label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.deconflictionRow span,
+.deconflictionRow small {
+  overflow-wrap: anywhere;
+}
+
+.mapDeconflictionPanel {
+  margin-top: 18px;
+}
+
+.routePickerOption span,
+.routeCard button span,
+.dataRow small {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.78rem;
+  opacity: 0.82;
+}

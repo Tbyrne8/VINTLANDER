@@ -59,6 +59,12 @@ function extractAltitude(value) {
 
 function hasAllImportantWords(userValue, correctValue) {
   const user = normalise(userValue);
+  const correct = normalise(correctValue);
+
+  if (correct.includes("GUN") && !user.includes("GUN")) {
+    return false;
+  }
+
   const importantWords = tokens(correctValue).filter(
     (word) =>
       ![
@@ -71,6 +77,7 @@ function hasAllImportantWords(userValue, correctValue) {
         "ROUNDS",
         "ROUND",
         "INTERNAL",
+        "GUN",
       ].includes(word)
   );
 
