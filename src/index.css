@@ -149,3 +149,14 @@ body {
   font-weight: 800;
   letter-spacing: 0.08em;
 }
+
+.radioVoiceControls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.radioVoiceControls label {
+  display: grid;
+  gap: 5px;
+}

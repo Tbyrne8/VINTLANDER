@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   generateCheckIn,
   getAircraftOptions,
@@ -22,10 +22,19 @@ const blankCheckIn = {
 const firstScenario = generateCheckIn("random");
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
 const savedControlPoints = "vintlander.controlPoints";
+const savedRadioProfile = "vintlander.radioProfile";
+const savedRadioVoice = "vintlander.radioVoice";
 const deliveryOptions = [
   { id: "generatedText", label: "Generated text" },
   { id: "generatedRadio", label: "Generated radio voice" },
   { id: "dsVoice", label: "DS local voice" },
+];
+const radioVoiceProfiles = [
+  { id: "auto", label: "Best available", rate: 0.8, pitch: 0.78, volume: 0.94 },
+  { id: "pilotUk", label: "UK pilot", rate: 0.77, pitch: 0.68, volume: 0.94 },
+  { id: "pilotUs", label: "US pilot", rate: 0.8, pitch: 0.74, volume: 0.94 },
+  { id: "calmController", label: "Calm controller", rate: 0.72, pitch: 0.82, volume: 0.92 },
+  { id: "fastJet", label: "Fast jet clipped", rate: 0.88, pitch: 0.7, volume: 0.95 },
 ];
 const heightBlockOptions = Array.from({ length: 30 }, (_, index) => {
   const feet = (index + 1) * 1000;
@@ -142,6 +151,149 @@ function formatControlPointLabel(point) {
   return `${type} ${rawName || "CONTROL"}`;
 }
 
+function formatRadioVoiceText(lines) {
+  return lines
+    .map((line) =>
+      line
+        .replace(/\bA\/C\b/g, "aircraft")
+        .replace(/\bDL\b/g, "downlink")
+        .replace(/\bISR\b/g, "eye ess arr")
+        .replace(/\bIR\b/g, "eye arr")
+        .replace(/\bEO\b/g, "ee oh")
+        .replace(/\bFMV\b/g, "eff emm vee")
+        .replace(/\bTGP\b/g, "tee gee pee")
+        .replace(/\bROVER\b/g, "rover")
+        .replace(/\bGBU\b/g, "gee bee you")
+        .replace(/\bAGM\b/g, "ay gee emm")
+        .replace(/\bSDB\b/g, "ess dee bee")
+        .replace(/\bMQ-9\b/g, "emm queue nine")
+        .replace(/\bF-35A\b/g, "eff thirty five alpha")
+        .replace(/\bF-35B\b/g, "eff thirty five bravo")
+        .replace(/\bF-16C\b/g, "eff sixteen charlie")
+        .replace(/\bF-15E\b/g, "eff fifteen echo")
+        .replace(/\bF\/A-18E\b/g, "eff ay eighteen echo")
+        .replace(/\bA-10C\b/g, "ay ten charlie")
+        .replace(/\bAC-130J\b/g, "ay see one thirty juliett")
+    )
+    .join(" ... ");
+}
+
+function getBestRadioVoice(voices, profileId = "auto", preferredVoiceName = "") {
+  if (!voices?.length) return null;
+
+  if (preferredVoiceName) {
+    const selectedVoice = voices.find((voice) => voice.name === preferredVoiceName);
+
+    if (selectedVoice) return selectedVoice;
+  }
+
+  const naturalVoice = voices.find((voice) =>
+    /natural|online|neural|premium/i.test(voice.name)
+  );
+  const preferredByProfile = {
+    pilotUk: ["George", "Daniel", "Ryan", "Thomas", "Arthur", "Oliver"],
+    pilotUs: ["Guy", "David", "Mark", "Alex", "Roger", "Eric"],
+    calmController: ["Daniel", "George", "Ryan", "David", "Guy"],
+    fastJet: ["Ryan", "Guy", "Mark", "David", "Alex"],
+    auto: ["George", "Daniel", "Ryan", "Guy", "David", "Mark", "Alex"],
+  };
+  const preferredNames = preferredByProfile[profileId] || preferredByProfile.auto;
+  const preferredLang = profileId === "pilotUk" ? /^en-GB/i : /^en-(US|GB|AU|CA)/i;
+
+  return (
+    naturalVoice ||
+    voices.find((voice) =>
+      preferredNames.some((name) => voice.name.includes(name))
+    ) ||
+    voices.find((voice) => preferredLang.test(voice.lang)) ||
+    voices.find((voice) => /^en/i.test(voice.lang)) ||
+    null
+  );
+}
+
+function getRadioProfile(profileId) {
+  return (
+    radioVoiceProfiles.find((profile) => profile.id === profileId) ||
+    radioVoiceProfiles[0]
+  );
+}
+
+function startRadioBed() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContext) return null;
+
+  const context = new AudioContext();
+  const noiseBuffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
+  const data = noiseBuffer.getChannelData(0);
+
+  for (let index = 0; index < data.length; index += 1) {
+    data[index] = Math.random() * 2 - 1;
+  }
+
+  const noise = context.createBufferSource();
+  noise.buffer = noiseBuffer;
+  noise.loop = true;
+
+  const highpass = context.createBiquadFilter();
+  highpass.type = "highpass";
+  highpass.frequency.value = 900;
+
+  const lowpass = context.createBiquadFilter();
+  lowpass.type = "lowpass";
+  lowpass.frequency.value = 2800;
+
+  const gain = context.createGain();
+  gain.gain.value = 0.018;
+
+  noise.connect(highpass);
+  highpass.connect(lowpass);
+  lowpass.connect(gain);
+  gain.connect(context.destination);
+  noise.start();
+
+  return { context, noise, gain };
+}
+
+function playRadioClick(radioBed, frequency = 0.07, duration = 0.05) {
+  if (!radioBed?.context) return;
+
+  const { context } = radioBed;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+
+  oscillator.type = "square";
+  oscillator.frequency.value = 700 + frequency * 1000;
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.06, context.currentTime + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + duration + 0.01);
+}
+
+function stopRadioBed(radioAudioRef) {
+  const radioBed = radioAudioRef.current;
+
+  if (!radioBed) return;
+
+  try {
+    radioBed.gain?.gain.exponentialRampToValueAtTime(
+      0.0001,
+      radioBed.context.currentTime + 0.08
+    );
+    window.setTimeout(() => {
+      radioBed.noise?.stop();
+      radioBed.context?.close();
+    }, 110);
+  } catch {
+    radioBed.context?.close();
+  }
+
+  radioAudioRef.current = null;
+}
+
 export default function CheckIn({
   platforms,
   setPlatforms,
@@ -161,6 +313,15 @@ export default function CheckIn({
   const [controlPoints, setControlPoints] = useState(loadSavedControlPoints);
   const [routePickerOpen, setRoutePickerOpen] = useState(false);
   const [deliveryMode, setDeliveryMode] = useState("generatedText");
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [radioProfile, setRadioProfile] = useState(
+    () => window.localStorage.getItem(savedRadioProfile) || "auto"
+  );
+  const [preferredRadioVoice, setPreferredRadioVoice] = useState(
+    () => window.localStorage.getItem(savedRadioVoice) || ""
+  );
+  const [radioPlaying, setRadioPlaying] = useState(false);
+  const radioAudioRef = useRef(null);
 
   const aircraftOptions = getAircraftOptions();
   const activeTransmission = scenario.transmissions[currentTransmission];
@@ -177,6 +338,36 @@ export default function CheckIn({
       setControlPoints(loadSavedControlPoints());
     }
   }, [serialMode]);
+
+  useEffect(() => {
+    if (!window.speechSynthesis) return undefined;
+
+    function loadVoices() {
+      setAvailableVoices(window.speechSynthesis.getVoices());
+    }
+
+    loadVoices();
+    window.speechSynthesis.addEventListener?.("voiceschanged", loadVoices);
+
+    return () => {
+      window.speechSynthesis.cancel();
+      stopRadioBed(radioAudioRef);
+      window.speechSynthesis.removeEventListener?.("voiceschanged", loadVoices);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedRadioProfile, radioProfile);
+  }, [radioProfile]);
+
+  useEffect(() => {
+    if (preferredRadioVoice) {
+      window.localStorage.setItem(savedRadioVoice, preferredRadioVoice);
+      return;
+    }
+
+    window.localStorage.removeItem(savedRadioVoice);
+  }, [preferredRadioVoice]);
 
   useEffect(() => {
     if (!started || complete) return undefined;
@@ -215,13 +406,44 @@ export default function CheckIn({
     }
 
     window.speechSynthesis.cancel();
+    stopRadioBed(radioAudioRef);
+
+    const radioBed = startRadioBed();
+    radioAudioRef.current = radioBed;
+    setRadioPlaying(true);
+    playRadioClick(radioBed, 0.08, 0.055);
+
+    const profile = getRadioProfile(radioProfile);
     const utterance = new SpeechSynthesisUtterance(
-      (activeTransmission.voiceLines || activeTransmission.lines).join(". ")
+      formatRadioVoiceText(activeTransmission.voiceLines || activeTransmission.lines)
     );
-    utterance.rate = 0.86;
-    utterance.pitch = 0.82;
-    utterance.volume = 0.95;
+    utterance.voice = getBestRadioVoice(
+      availableVoices,
+      radioProfile,
+      preferredRadioVoice
+    );
+    utterance.rate = profile.rate;
+    utterance.pitch = profile.pitch;
+    utterance.volume = profile.volume;
+    utterance.onend = () => {
+      playRadioClick(radioBed, 0.05, 0.045);
+      window.setTimeout(() => {
+        stopRadioBed(radioAudioRef);
+        setRadioPlaying(false);
+      }, 140);
+    };
+    utterance.onerror = () => {
+      stopRadioBed(radioAudioRef);
+      setRadioPlaying(false);
+    };
+
     window.speechSynthesis.speak(utterance);
+  }
+
+  function stopTransmission() {
+    window.speechSynthesis?.cancel();
+    stopRadioBed(radioAudioRef);
+    setRadioPlaying(false);
   }
 
   function updateField(field, value) {
@@ -290,6 +512,8 @@ export default function CheckIn({
 
   function repeatStage(transmissionIndex) {
     window.speechSynthesis?.cancel();
+    stopRadioBed(radioAudioRef);
+    setRadioPlaying(false);
     setCurrentTransmission(transmissionIndex);
     setComplete(false);
     setResults(null);
@@ -567,6 +791,43 @@ export default function CheckIn({
                 </label>
               )}
 
+              {activeDeliveryMode === "generatedRadio" && (
+                <div className="radioVoiceControls">
+                  <label>
+                    Radio Voice Style
+                    <select
+                      value={radioProfile}
+                      onChange={(event) => setRadioProfile(event.target.value)}
+                    >
+                      {radioVoiceProfiles.map((profile) => (
+                        <option key={profile.id} value={profile.id}>
+                          {profile.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Installed Voice
+                    <select
+                      value={preferredRadioVoice}
+                      onChange={(event) =>
+                        setPreferredRadioVoice(event.target.value)
+                      }
+                    >
+                      <option value="">Auto select natural voice</option>
+                      {availableVoices
+                        .filter((voice) => /^en/i.test(voice.lang))
+                        .map((voice) => (
+                          <option key={`${voice.name}-${voice.lang}`} value={voice.name}>
+                            {voice.name} / {voice.lang}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+
               <p>
                 Press start. A new aircraft check-in will be generated each
                 time. Fill the slate card while the transmission is coming in,
@@ -591,8 +852,12 @@ export default function CheckIn({
                 </div>
               ) : isVoiceMode ? (
                 <div className="radioText voiceModePanel">
-                  <p>GENERATED RADIO VOICE READY</p>
-                  <p>Use Play Radio Voice, then complete the slate card from audio.</p>
+                  <p>{radioPlaying ? "RADIO TRANSMITTING" : "GENERATED RADIO VOICE READY"}</p>
+                  <p>
+                    {radioPlaying
+                      ? "Monitor the radio call and complete the slate card from audio."
+                      : "Use Play Radio Voice, then complete the slate card from audio."}
+                  </p>
                 </div>
               ) : (
                 <div className="radioText">
@@ -606,7 +871,14 @@ export default function CheckIn({
 
               <div className="radioControls">
                 {isVoiceMode && (
-                  <button onClick={speakTransmission}>Play Radio Voice</button>
+                  <>
+                    <button onClick={speakTransmission}>
+                      {radioPlaying ? "Replay Radio Voice" : "Play Radio Voice"}
+                    </button>
+                    {radioPlaying && (
+                      <button onClick={stopTransmission}>Stop Radio</button>
+                    )}
+                  </>
                 )}
                 {!isDsVoiceMode && !isVoiceMode && (
                   <button onClick={repeatTransmission}>Repeat Last</button>
