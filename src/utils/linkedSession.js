@@ -11,10 +11,17 @@ import {
 } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey:
+    import.meta.env.VITE_FIREBASE_API_KEY ||
+    "AIzaSyCyyq3SmZWemrY8baqu_Q33RC7oboCfMfk",
+  authDomain:
+    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
+    "vintage-tacp-trainer.firebaseapp.com",
+  projectId:
+    import.meta.env.VITE_FIREBASE_PROJECT_ID || "vintage-tacp-trainer",
+  appId:
+    import.meta.env.VITE_FIREBASE_APP_ID ||
+    "1:110373279046:web:c1beb97414f29cab31c147",
 };
 
 export const linkedModeConfigured = Object.values(firebaseConfig).every(Boolean);
