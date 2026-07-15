@@ -3,6 +3,7 @@ import { recordMissionEvent } from "../utils/missionEvents.js";
 
 const savedTargets = "vintlander.targets";
 const savedBriefs = "vintlander.attackBriefs";
+const savedAttackStatus = "vintlander.attackStatus";
 
 function SerialWorkflowNav({ onNavigate }) {
   return (
@@ -161,19 +162,41 @@ export default function NineLine({
         aircraft: selectedPlatform.aircraft,
         positionAltitude: selectedPlatform.positionAltitude,
         capabilities: selectedPlatform.capabilities,
+        routePosition: selectedPlatform.routePosition,
+        routedControlPoint: selectedPlatform.routedControlPoint,
       },
       target: selectedTarget,
       brief,
       lines: nineLines,
     };
 
-    setBriefs((current) => [savedBrief, ...current].slice(0, 12));
+    const updatedBriefs = [savedBrief, ...briefs].slice(0, 12);
+    setBriefs(updatedBriefs);
     recordMissionEvent({
       type: "nine-line",
       title: `9-Line saved for ${savedBrief.platform.callsign}`,
       detail: `Target ${savedBrief.target.id} / ${savedBrief.brief.controlType}`,
       data: { brief: savedBrief },
     });
+
+    if (serialMode) {
+      window.localStorage.setItem(savedBriefs, JSON.stringify(updatedBriefs));
+      const currentAttackStatus = loadSavedList(savedAttackStatus);
+      window.localStorage.setItem(
+        savedAttackStatus,
+        JSON.stringify({
+          ...(currentAttackStatus && !Array.isArray(currentAttackStatus)
+            ? currentAttackStatus
+            : {}),
+          phase: readbackConfirmed ? "Readback correct" : "9-Line passed",
+          linkedBriefId: savedBrief.id,
+          bda: readbackConfirmed
+            ? `9-Line linked and readback confirmed for ${savedBrief.platform.callsign} onto ${savedBrief.target.id}.`
+            : `9-Line linked for ${savedBrief.platform.callsign} onto ${savedBrief.target.id}; readback pending.`,
+        })
+      );
+      onNavigate("tacp");
+    }
   }
 
   function deleteBrief(id) {
@@ -390,7 +413,9 @@ export default function NineLine({
               {readbackConfirmed ? "Mark Readback Pending" : "Confirm Readback"}
             </button>
             <button onClick={copyBrief}>Copy Brief</button>
-            <button onClick={saveBrief}>Save Attack Brief</button>
+            <button onClick={saveBrief}>
+              {serialMode ? "Save & Continue To Attack" : "Save Attack Brief"}
+            </button>
           </div>
         </div>
       </section>
