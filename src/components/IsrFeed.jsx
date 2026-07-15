@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Map } from "@vis.gl/react-google-maps";
 import * as mgrs from "mgrs";
+import { getAttackRunGeometry } from "../utils/attackRun.js";
 
 const sensorZoomLevels = [1, 4, 12, 32];
 
@@ -9,6 +10,8 @@ export default function IsrFeed({
   targets,
   platforms,
   onSensorPositionChange,
+  attackStatus,
+  attackBrief,
 }) {
   const [open, setOpen] = useState(false);
   const [accessCode, setAccessCode] = useState("");
@@ -38,11 +41,22 @@ export default function IsrFeed({
     [altitudeProfile, orbitAnchor, platformProfile]
   );
   const activeTarget = targets.find((target) => target.id === activeTargetId);
-  const aircraftPosition = useMemo(
+  const orbitAircraftPosition = useMemo(
     () =>
       getOrbitPosition(orbitCenter, feedTick, altitudeProfile, platformProfile),
     [altitudeProfile, feedTick, orbitCenter, platformProfile]
   );
+  const attackGeometry = getAttackRunGeometry(
+    attackStatus,
+    attackBrief,
+    unlockedPlatform,
+    Date.now()
+  );
+  const aircraftPosition =
+    attackGeometry &&
+    attackStatus?.attackPlatform?.callsign === unlockedPlatform?.callsign
+      ? attackGeometry.aircraftPosition
+      : orbitAircraftPosition;
   const desiredFeedCenter = useMemo(
     () => (activeTarget ? activeTarget.position : aircraftPosition),
     [activeTarget, aircraftPosition]
@@ -88,6 +102,11 @@ export default function IsrFeed({
     unlockedPlatform?.positionAltitude
   );
   const feedMode = activeTarget ? "TARGET TRACK" : "AREA ORBIT";
+  const attackImpactVisible = Boolean(
+    activeTarget &&
+      attackStatus?.attackTarget?.id === activeTarget.id &&
+      attackGeometry?.impactVisible
+  );
 
   useEffect(() => {
     if (!onSensorPositionChange) return;
@@ -306,6 +325,13 @@ export default function IsrFeed({
                 </div>
                 <div className="vdlObliqueShade"></div>
                 <div className="vdlReticle"></div>
+                {attackImpactVisible && (
+                  <div className={`vdlImpactFlash ${attackStatus.weaponOutcome || "miss"}`}>
+                    <span></span>
+                    <strong>{String(attackStatus.weaponOutcome || "impact").toUpperCase()}</strong>
+                    <small>{Math.round(attackStatus.missDistanceMetres || 0)}M MISS DISTANCE</small>
+                  </div>
+                )}
                 <div className="vdlScanline"></div>
                 <div className="vdlModeTag">{sensorMode}</div>
                 {isSlewing && <div className="vdlSlewTag">SLEW</div>}

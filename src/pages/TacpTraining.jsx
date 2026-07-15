@@ -11,6 +11,7 @@ import TargetMarkers from "../components/TargetMarkers.jsx";
 import ObserverMarker from "../components/ObserverMarker.jsx";
 import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
 import MissionRadioPanel from "../components/MissionRadioPanel.jsx";
+import AttackRunMap from "../components/AttackRunMap.jsx";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -211,6 +212,16 @@ const defaultAttackStatus = {
   attackRunDurationMs: 90000,
   bdaAvailableAt: null,
   bdaDelayMs: 45000,
+  phaseStartedAt: null,
+  attackPlatform: null,
+  attackTarget: null,
+  weaponReleasedAt: null,
+  weaponImpactAt: null,
+  impactPosition: null,
+  weaponOutcome: null,
+  missDistanceMetres: null,
+  impactObservedAt: null,
+  egressStartedAt: null,
 };
 
 const defaultAttackBrief = {
@@ -1151,6 +1162,8 @@ export default function TacpTraining({
         aircraft: selectedAttackPlatform.aircraft,
         positionAltitude: selectedAttackPlatform.positionAltitude,
         capabilities: selectedAttackPlatform.capabilities,
+        routePosition: selectedAttackPlatform.routePosition,
+        routedControlPoint: selectedAttackPlatform.routedControlPoint,
       },
       target: selectedAttackTarget,
       brief: attackBriefDraft,
@@ -1225,6 +1238,18 @@ export default function TacpTraining({
   function setAttackPhase(phase) {
     const now = Date.now();
     const startsAttackRun = phase === "Cleared hot";
+    const releasesWeapon = phase === "Weapon away";
+    const observesImpact = phase === "Effects observed";
+    const attackPlatform =
+      linkedAttackBrief?.platform || selectedAttackPlatform || selectedPlatform;
+    const attackTarget = linkedAttackBrief?.target || selectedAttackTarget;
+    const weaponTimeToImpactMs = getWeaponTimeToImpactMs(attackPlatform?.aircraft);
+    const impactSolution = releasesWeapon
+      ? createImpactSolution(
+          attackTarget?.position,
+          `${attackPlatform?.callsign || "AIR"}-${attackTarget?.id || "TARGET"}-${now}`
+        )
+      : null;
     const attackRunDurationMs = getAttackRunDurationMs(
       linkedAttackBrief?.platform?.aircraft ||
         selectedAttackPlatform?.aircraft ||
@@ -1239,6 +1264,21 @@ export default function TacpTraining({
     setAttackStatus((current) => ({
       ...current,
       phase,
+      phaseStartedAt: now,
+      attackPlatform: attackPlatform
+        ? {
+            callsign: attackPlatform.callsign,
+            aircraft: attackPlatform.aircraft,
+            routePosition: attackPlatform.routePosition,
+          }
+        : current.attackPlatform,
+      attackTarget: attackTarget
+        ? {
+            id: attackTarget.id,
+            position: attackTarget.position,
+            description: attackTarget.description || attackTarget.type,
+          }
+        : current.attackTarget,
       clearance:
         phase === "Cleared hot"
           ? "Cleared hot"
@@ -1253,6 +1293,10 @@ export default function TacpTraining({
         : current.attackRunDurationMs,
       bdaAvailableAt: startsAttackRun
         ? now + attackRunDurationMs + bdaDelayMs
+        : releasesWeapon
+          ? now + weaponTimeToImpactMs + bdaDelayMs
+        : phase === "IP inbound"
+          ? null
         : ["Abort", "Dry / no drop"].includes(phase)
           ? null
           : current.bdaAvailableAt,
@@ -1260,7 +1304,30 @@ export default function TacpTraining({
       bda:
         startsAttackRun
           ? `Cleared hot. Attack run in progress; BDA expected in ${formatCountdown(attackRunDurationMs + bdaDelayMs)}.`
+          : releasesWeapon
+            ? `Weapon away. Impact expected in ${formatCountdown(weaponTimeToImpactMs)}.`
+            : observesImpact && current.weaponOutcome
+              ? formatGeneratedBda(current.weaponOutcome, current.missDistanceMetres)
           : current.bda,
+      weaponReleasedAt:
+        phase === "IP inbound" ? null : releasesWeapon ? now : current.weaponReleasedAt,
+      weaponImpactAt: releasesWeapon
+        ? now + weaponTimeToImpactMs
+        : phase === "IP inbound"
+          ? null
+        : current.weaponImpactAt,
+      impactPosition:
+        phase === "IP inbound" ? null : impactSolution?.position || current.impactPosition,
+      weaponOutcome:
+        phase === "IP inbound" ? null : impactSolution?.outcome || current.weaponOutcome,
+      missDistanceMetres:
+        phase === "IP inbound"
+          ? null
+          : impactSolution?.missDistanceMetres ?? current.missDistanceMetres,
+      impactObservedAt:
+        phase === "IP inbound" ? null : observesImpact ? now : current.impactObservedAt,
+      egressStartedAt:
+        phase === "IP inbound" ? null : observesImpact ? now : current.egressStartedAt,
     }));
 
     if (["Cleared hot", "Abort", "Dry / no drop"].includes(phase)) {
@@ -1289,13 +1356,22 @@ export default function TacpTraining({
       linkedAttackBrief?.platform?.callsign ||
       selectedPlatform?.callsign ||
       selectedAircraftLabel;
-    const bda = `${platformCallsign}: ${bdaEffect}. ${bdaText || "No further BDA."}`;
+    const generatedEffect = attackStatus.weaponOutcome
+      ? formatGeneratedBda(
+          attackStatus.weaponOutcome,
+          attackStatus.missDistanceMetres
+        )
+      : bdaEffect;
+    const bda = `${platformCallsign}: ${generatedEffect}. ${bdaText || "No further BDA."}`;
 
     setAttackStatus((current) => ({
       ...current,
-      phase: bdaEffect.includes("Re-attack") ? "Re-attack required" : "Effects observed",
+      phase:
+        attackStatus.weaponOutcome === "miss" || bdaEffect.includes("Re-attack")
+          ? "Re-attack required"
+          : "Effects observed",
       bda,
-      effect: bdaEffect,
+      effect: generatedEffect,
       reattack: reattackDecision,
       bdaAvailableAt: null,
     }));
@@ -1323,6 +1399,8 @@ export default function TacpTraining({
           aircraft: selectedAttackPlatform.aircraft,
           positionAltitude: selectedAttackPlatform.positionAltitude,
           capabilities: selectedAttackPlatform.capabilities,
+          routePosition: selectedAttackPlatform.routePosition,
+          routedControlPoint: selectedAttackPlatform.routedControlPoint,
         },
         target: selectedAttackTarget,
         brief: attackBriefDraft,
@@ -1377,21 +1455,27 @@ export default function TacpTraining({
       "Aircraft";
     const targetId =
       linkedAttackBrief?.target?.id || selectedAttackTarget?.id || "target";
-    const bda = `${platformCallsign}: Target effects observed on ${targetId}. No re-attack required.`;
+    const outcome = attackStatus.weaponOutcome || "hit";
+    const generatedEffect = formatGeneratedBda(
+      outcome,
+      attackStatus.missDistanceMetres
+    );
+    const requiresReattack = outcome === "miss";
+    const bda = `${platformCallsign}: ${generatedEffect} on ${targetId}. ${requiresReattack ? "Re-attack required." : "No re-attack required."}`;
 
     setAttackStatus((current) => ({
       ...current,
-      phase: "Effects observed",
+      phase: requiresReattack ? "Re-attack required" : "Effects observed",
       bda,
-      effect: "Target hit",
-      reattack: "No re-attack required",
+      effect: generatedEffect,
+      reattack: requiresReattack ? "Re-attack requested" : "No re-attack required",
       bdaAvailableAt: null,
     }));
     setCompletedTasks((current) => ({
       ...current,
       [getTaskKey("effects", 0)]: true,
       [getTaskKey("effects", 1)]: true,
-      [getTaskKey("effects", 2)]: true,
+      [getTaskKey("effects", 2)]: !requiresReattack,
     }));
   }
 
@@ -2248,11 +2332,24 @@ export default function TacpTraining({
             attackStatus={attackStatus}
             attackRunRemainingMs={attackRunRemainingMs}
             canSendBda={canSendBda}
-            bdaEffect={bdaEffect}
+            bdaEffect={
+              attackStatus.weaponOutcome
+                ? formatGeneratedBda(
+                    attackStatus.weaponOutcome,
+                    attackStatus.missDistanceMetres
+                  )
+                : bdaEffect
+            }
             bdaText={bdaText}
             onMarkReadback={markReadback}
             onSetAttackPhase={setAttackPhase}
             onSendBda={serialVariant === "self" ? autoSelfLedBda : sendPlatformBda}
+          />
+
+          <AttackRunMap
+            attackStatus={attackStatus}
+            brief={linkedAttackBrief}
+            platform={linkedAttackBrief?.platform || selectedAttackPlatform}
           />
 
           {serialVariant === "self" && (
@@ -3361,6 +3458,66 @@ function getBdaDelayMs(aircraft = "") {
   }
 
   return 45000;
+}
+
+function getWeaponTimeToImpactMs(aircraft = "") {
+  const normalisedAircraft = aircraft.toUpperCase();
+
+  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
+    return 18000;
+  }
+
+  if (normalisedAircraft.includes("A-10")) {
+    return 12000;
+  }
+
+  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
+    return 35000;
+  }
+
+  return 30000;
+}
+
+function createImpactSolution(targetPosition, seed = "") {
+  if (!targetPosition) return null;
+
+  const hash = [...seed].reduce(
+    (value, character) => ((value * 33 + character.charCodeAt(0)) >>> 0),
+    5381
+  );
+  const outcomeRoll = (hash % 1000) / 1000;
+  const outcome = outcomeRoll < 0.78 ? "hit" : outcomeRoll < 0.94 ? "miss" : "near miss";
+  const missDistanceMetres =
+    outcome === "hit"
+      ? 8 + ((hash >>> 8) % 42)
+      : outcome === "near miss"
+        ? 65 + ((hash >>> 8) % 75)
+        : 160 + ((hash >>> 8) % 540);
+  const angle = ((hash >>> 16) % 360) * (Math.PI / 180);
+
+  return {
+    outcome,
+    missDistanceMetres,
+    position: offsetPosition(
+      targetPosition,
+      Math.sin(angle) * missDistanceMetres,
+      Math.cos(angle) * missDistanceMetres
+    ),
+  };
+}
+
+function formatGeneratedBda(outcome, missDistanceMetres) {
+  const roundedDistance = Math.max(0, Math.round(Number(missDistanceMetres) || 0));
+
+  if (outcome === "hit") {
+    return `Weapon impact on target. Effective hit, estimated miss distance ${roundedDistance} metres`;
+  }
+
+  if (outcome === "near miss") {
+    return `Weapon impact close to target, estimated miss distance ${roundedDistance} metres. Effects uncertain`;
+  }
+
+  return `Weapon missed target, estimated miss distance ${roundedDistance} metres. Re-attack required`;
 }
 
 function formatCountdown(milliseconds = 0) {

@@ -19,12 +19,15 @@ import AirPlatformLocator from "../components/AirPlatformLocator.jsx";
 import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
 import ControlPointLocator from "../components/ControlPointLocator.jsx";
 import PendingRouteLine from "../components/PendingRouteLine.jsx";
+import AttackRunMarkers from "../components/AttackRunMarkers.jsx";
 
 const savedTargets = "vintlander.targets";
 const savedObserverPosition = "vintlander.observerPosition";
 const savedControlPoints = "vintlander.controlPoints";
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
 const savedMapCenter = "vintlander.mapCenter";
+const savedAttackStatus = "vintlander.attackStatus";
+const savedAttackBriefs = "vintlander.attackBriefs";
 const standaloneStorageKeys = {
   targets: "vintlander.standalone.targets",
   observerPosition: "vintlander.standalone.observerPosition",
@@ -104,6 +107,15 @@ function loadPendingCheckIn() {
   }
 }
 
+function loadSavedValue(key, fallback) {
+  try {
+    const saved = window.localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function MapTrainer({
   platforms,
   setPlatforms,
@@ -141,6 +153,16 @@ export default function MapTrainer({
   );
   const [missionAnchor, setMissionAnchor] = useState(position);
   const [airPictureTick, setAirPictureTick] = useState(0);
+  const attackStatus = serialMode
+    ? loadSavedValue(savedAttackStatus, null)
+    : null;
+  const linkedAttackBrief =
+    serialMode && attackStatus?.linkedBriefId
+      ? loadSavedValue(savedAttackBriefs, []).find(
+          (brief) => brief.id === attackStatus.linkedBriefId
+        ) || null
+      : null;
+  const attackCallsign = attackStatus?.attackPlatform?.callsign;
 
   const livePlatformTracks = useMemo(
     () =>
@@ -153,8 +175,10 @@ export default function MapTrainer({
   const visibleAirPlatforms = useMemo(() => {
     if (!showAllPlatforms) return [];
 
-    return livePlatformTracks;
-  }, [livePlatformTracks, showAllPlatforms]);
+    return attackCallsign
+      ? livePlatformTracks.filter((platform) => platform.callsign !== attackCallsign)
+      : livePlatformTracks;
+  }, [attackCallsign, livePlatformTracks, showAllPlatforms]);
 
   const routedPendingPlatform = useMemo(() => {
     if (!pendingCheckIn?.routePosition) return null;
@@ -862,6 +886,12 @@ export default function MapTrainer({
         >
           <MapCentreTracker setPosition={setPosition} />
           <TargetMarkers targets={targets} />
+          <AttackRunMarkers
+            attackStatus={attackStatus}
+            brief={linkedAttackBrief}
+            platform={linkedAttackBrief?.platform}
+            now={Date.now()}
+          />
           <ControlPointMarkers controlPoints={controlPoints} />
           <ObserverMarker observerPosition={observerPosition} />
           <ObserverLine
@@ -937,6 +967,8 @@ export default function MapTrainer({
           targets={targets}
           platforms={platforms}
           onSensorPositionChange={updateActiveAirPlatform}
+          attackStatus={attackStatus}
+          attackBrief={linkedAttackBrief}
         />
       </section>
     </main>
