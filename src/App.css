@@ -1902,3 +1902,37 @@ select {
 .radioText p {
   margin: 0 0 8px;
 }
+.missionRadioPanel {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid rgba(99, 179, 237, 0.35);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(6, 18, 28, 0.96), rgba(12, 34, 43, 0.92));
+}
+
+.missionRadioHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.missionRadioHeader h3 {
+  margin: 4px 0 0;
+}
+
+.missionRadioSummary {
+  color: #9ecbd4;
+  font-family: "Roboto Mono", monospace;
+  font-size: 0.82rem;
+}
+
+.missionRadioSteps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+}
+
+.missionRadioSteps button {
+  min-height: 44px;
+}

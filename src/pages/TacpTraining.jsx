@@ -10,6 +10,7 @@ import {
 import TargetMarkers from "../components/TargetMarkers.jsx";
 import ObserverMarker from "../components/ObserverMarker.jsx";
 import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
+import MissionRadioPanel from "../components/MissionRadioPanel.jsx";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -2235,6 +2236,24 @@ export default function TacpTraining({
               {attackStatus.phase} / {attackStatus.bda}
             </p>
           </div>
+
+          <MissionRadioPanel
+            controllerCallsign={controller.callsign}
+            platform={linkedAttackBrief?.platform || selectedAttackPlatform}
+            target={linkedAttackBrief?.target || selectedAttackTarget}
+            brief={linkedAttackBrief?.brief || attackBriefDraft}
+            briefReady={Boolean(linkedAttackBrief)}
+            lines={linkedAttackBrief?.lines || attackNineLines}
+            readbackState={attackReadbackState}
+            attackStatus={attackStatus}
+            attackRunRemainingMs={attackRunRemainingMs}
+            canSendBda={canSendBda}
+            bdaEffect={bdaEffect}
+            bdaText={bdaText}
+            onMarkReadback={markReadback}
+            onSetAttackPhase={setAttackPhase}
+            onSendBda={serialVariant === "self" ? autoSelfLedBda : sendPlatformBda}
+          />
 
           {serialVariant === "self" && (
             <div className="serialCard">
