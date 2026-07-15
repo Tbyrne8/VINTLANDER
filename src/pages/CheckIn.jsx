@@ -31,11 +31,11 @@ const deliveryOptions = [
   { id: "dsVoice", label: "DS local voice" },
 ];
 const radioVoiceProfiles = [
-  { id: "auto", label: "Best available", rate: 0.8, pitch: 0.78, volume: 0.94 },
-  { id: "pilotUk", label: "UK pilot", rate: 0.77, pitch: 0.68, volume: 0.94 },
-  { id: "pilotUs", label: "US pilot", rate: 0.8, pitch: 0.74, volume: 0.94 },
-  { id: "calmController", label: "Calm controller", rate: 0.72, pitch: 0.82, volume: 0.92 },
-  { id: "fastJet", label: "Fast jet clipped", rate: 0.88, pitch: 0.7, volume: 0.95 },
+  { id: "auto", label: "Varied pilot", rate: 1.02, pitch: 0.76, volume: 0.94, playbackRate: 1.18 },
+  { id: "pilotUk", label: "UK pilot", rate: 1.04, pitch: 0.68, volume: 0.94, playbackRate: 1.2 },
+  { id: "pilotUs", label: "US pilot", rate: 1.06, pitch: 0.72, volume: 0.94, playbackRate: 1.22 },
+  { id: "calmController", label: "Controller", rate: 0.96, pitch: 0.8, volume: 0.92, playbackRate: 1.13 },
+  { id: "fastJet", label: "Fast jet clipped", rate: 1.16, pitch: 0.68, volume: 0.95, playbackRate: 1.3 },
 ];
 const heightBlockOptions = Array.from({ length: 30 }, (_, index) => {
   const feet = (index + 1) * 1000;
@@ -153,6 +153,8 @@ function formatControlPointLabel(point) {
 }
 
 function formatRadioVoiceText(lines) {
+  const digitWords = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+
   return lines
     .map((line) =>
       line
@@ -175,8 +177,11 @@ function formatRadioVoiceText(lines) {
         .replace(/\bF\/A-18E\b/g, "eff ay eighteen echo")
         .replace(/\bA-10C\b/g, "ay ten charlie")
         .replace(/\bAC-130J\b/g, "ay see one thirty juliett")
+        .replace(/\d+/g, (digits) =>
+          [...digits].map((digit) => digitWords[Number(digit)]).join(" ")
+        )
     )
-    .join(" ... ");
+    .join(". ");
 }
 
 function getBestRadioVoice(voices, profileId = "auto", preferredVoiceName = "") {
@@ -245,7 +250,7 @@ function startRadioBed() {
   lowpass.frequency.value = 2800;
 
   const gain = context.createGain();
-  gain.gain.value = 0.018;
+  gain.gain.value = 0.026;
 
   noise.connect(highpass);
   highpass.connect(lowpass);
@@ -253,7 +258,36 @@ function startRadioBed() {
   gain.connect(context.destination);
   noise.start();
 
-  return { context, noise, gain };
+  const crackleTimer = window.setInterval(() => {
+    if (Math.random() < 0.72) playRadioCrackle(context);
+  }, 420);
+
+  return { context, noise, gain, crackleTimer };
+}
+
+function playRadioCrackle(context) {
+  if (!context) return;
+
+  const duration = 0.018 + Math.random() * 0.045;
+  const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+  const data = buffer.getChannelData(0);
+
+  for (let index = 0; index < data.length; index += 1) {
+    const envelope = 1 - index / data.length;
+    data[index] = (Math.random() * 2 - 1) * envelope;
+  }
+
+  const source = context.createBufferSource();
+  const highpass = context.createBiquadFilter();
+  const gain = context.createGain();
+  source.buffer = buffer;
+  highpass.type = "highpass";
+  highpass.frequency.value = 1200 + Math.random() * 900;
+  gain.gain.value = 0.035 + Math.random() * 0.045;
+  source.connect(highpass);
+  highpass.connect(gain);
+  gain.connect(context.destination);
+  source.start();
 }
 
 function playRadioClick(radioBed, frequency = 0.07, duration = 0.05) {
@@ -280,6 +314,7 @@ function stopRadioBed(radioAudioRef) {
   if (!radioBed) return;
 
   try {
+    window.clearInterval(radioBed.crackleTimer);
     radioBed.gain?.gain.exponentialRampToValueAtTime(
       0.0001,
       radioBed.context.currentTime + 0.08
@@ -420,12 +455,20 @@ export default function CheckIn({
         const response = await fetch(neuralRadioEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: speechText, profile: radioProfile }),
+          body: JSON.stringify({
+            text: speechText,
+            profile: radioProfile,
+            voiceKey:
+              scenario.correctCheckIn.aircraftCallsign ||
+              pendingCheckIn?.aircraftLabel ||
+              speechText,
+          }),
         });
 
         if (!response.ok) throw new Error(`Speech request failed: ${response.status}`);
 
         const audio = new Audio(URL.createObjectURL(await response.blob()));
+        audio.playbackRate = getRadioProfile(radioProfile).playbackRate || 1;
         neuralAudioRef.current = audio;
         setRadioLoading(false);
         setRadioPlaying(true);
