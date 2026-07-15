@@ -24,6 +24,7 @@ const savedPendingCheckIn = "vintlander.pendingCheckIn";
 const savedControlPoints = "vintlander.controlPoints";
 const savedRadioProfile = "vintlander.radioProfile";
 const savedRadioVoice = "vintlander.radioVoice";
+const neuralRadioEndpoint = import.meta.env.VITE_GOOGLE_TTS_ENDPOINT || "";
 const deliveryOptions = [
   { id: "generatedText", label: "Generated text" },
   { id: "generatedRadio", label: "Generated radio voice" },
@@ -321,7 +322,10 @@ export default function CheckIn({
     () => window.localStorage.getItem(savedRadioVoice) || ""
   );
   const [radioPlaying, setRadioPlaying] = useState(false);
+  const [radioLoading, setRadioLoading] = useState(false);
+  const [radioEngine, setRadioEngine] = useState("");
   const radioAudioRef = useRef(null);
+  const neuralAudioRef = useRef(null);
 
   const aircraftOptions = getAircraftOptions();
   const activeTransmission = scenario.transmissions[currentTransmission];
@@ -351,6 +355,7 @@ export default function CheckIn({
 
     return () => {
       window.speechSynthesis.cancel();
+      neuralAudioRef.current?.pause();
       stopRadioBed(radioAudioRef);
       window.speechSynthesis.removeEventListener?.("voiceschanged", loadVoices);
     };
@@ -399,23 +404,71 @@ export default function CheckIn({
     isVoiceMode,
   ]);
 
-  function speakTransmission() {
+  async function speakTransmission() {
+    window.speechSynthesis.cancel();
+    neuralAudioRef.current?.pause();
+    neuralAudioRef.current = null;
+    stopRadioBed(radioAudioRef);
+    setRadioLoading(Boolean(neuralRadioEndpoint));
+
+    const speechText = formatRadioVoiceText(
+      activeTransmission.voiceLines || activeTransmission.lines
+    );
+
+    if (neuralRadioEndpoint) {
+      try {
+        const response = await fetch(neuralRadioEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: speechText, profile: radioProfile }),
+        });
+
+        if (!response.ok) throw new Error(`Speech request failed: ${response.status}`);
+
+        const audio = new Audio(URL.createObjectURL(await response.blob()));
+        neuralAudioRef.current = audio;
+        setRadioLoading(false);
+        setRadioPlaying(true);
+        setRadioEngine("Google neural voice");
+        const radioBed = startRadioBed();
+        radioAudioRef.current = radioBed;
+        playRadioClick(radioBed, 0.08, 0.055);
+        audio.onended = () => finishRadioPlayback(radioBed);
+        audio.onerror = () => finishRadioPlayback(radioBed);
+        await audio.play();
+        return;
+      } catch (error) {
+        console.warn("Neural radio unavailable; using browser voice.", error);
+      }
+    }
+
+    setRadioLoading(false);
+    speakWithBrowserVoice(speechText);
+  }
+
+  function finishRadioPlayback(radioBed) {
+    playRadioClick(radioBed, 0.05, 0.045);
+    window.setTimeout(() => {
+      stopRadioBed(radioAudioRef);
+      setRadioPlaying(false);
+    }, 140);
+  }
+
+  function speakWithBrowserVoice(speechText) {
     if (!window.speechSynthesis) {
       alert("Voice playback is not available in this browser.");
       return;
     }
 
-    window.speechSynthesis.cancel();
-    stopRadioBed(radioAudioRef);
-
     const radioBed = startRadioBed();
     radioAudioRef.current = radioBed;
     setRadioPlaying(true);
+    setRadioEngine("Browser fallback voice");
     playRadioClick(radioBed, 0.08, 0.055);
 
     const profile = getRadioProfile(radioProfile);
     const utterance = new SpeechSynthesisUtterance(
-      formatRadioVoiceText(activeTransmission.voiceLines || activeTransmission.lines)
+      speechText
     );
     utterance.voice = getBestRadioVoice(
       availableVoices,
@@ -426,11 +479,7 @@ export default function CheckIn({
     utterance.pitch = profile.pitch;
     utterance.volume = profile.volume;
     utterance.onend = () => {
-      playRadioClick(radioBed, 0.05, 0.045);
-      window.setTimeout(() => {
-        stopRadioBed(radioAudioRef);
-        setRadioPlaying(false);
-      }, 140);
+      finishRadioPlayback(radioBed);
     };
     utterance.onerror = () => {
       stopRadioBed(radioAudioRef);
@@ -442,7 +491,10 @@ export default function CheckIn({
 
   function stopTransmission() {
     window.speechSynthesis?.cancel();
+    neuralAudioRef.current?.pause();
+    neuralAudioRef.current = null;
     stopRadioBed(radioAudioRef);
+    setRadioLoading(false);
     setRadioPlaying(false);
   }
 
@@ -825,6 +877,12 @@ export default function CheckIn({
                         ))}
                     </select>
                   </label>
+
+                  <small>
+                    {neuralRadioEndpoint
+                      ? "Google neural radio enabled; browser voice is the automatic fallback."
+                      : "Browser voice active until the Google speech endpoint is configured."}
+                  </small>
                 </div>
               )}
 
@@ -852,10 +910,18 @@ export default function CheckIn({
                 </div>
               ) : isVoiceMode ? (
                 <div className="radioText voiceModePanel">
-                  <p>{radioPlaying ? "RADIO TRANSMITTING" : "GENERATED RADIO VOICE READY"}</p>
                   <p>
-                    {radioPlaying
-                      ? "Monitor the radio call and complete the slate card from audio."
+                    {radioLoading
+                      ? "GENERATING NEURAL RADIO"
+                      : radioPlaying
+                        ? "RADIO TRANSMITTING"
+                        : "GENERATED RADIO VOICE READY"}
+                  </p>
+                  <p>
+                    {radioLoading
+                      ? "Preparing the aircraft transmission..."
+                      : radioPlaying
+                      ? `Monitor the radio call and complete the slate card from audio. ${radioEngine}`
                       : "Use Play Radio Voice, then complete the slate card from audio."}
                   </p>
                 </div>
@@ -873,9 +939,13 @@ export default function CheckIn({
                 {isVoiceMode && (
                   <>
                     <button onClick={speakTransmission}>
-                      {radioPlaying ? "Replay Radio Voice" : "Play Radio Voice"}
+                      {radioLoading
+                        ? "Generating Radio..."
+                        : radioPlaying
+                          ? "Replay Radio Voice"
+                          : "Play Radio Voice"}
                     </button>
-                    {radioPlaying && (
+                    {(radioPlaying || radioLoading) && (
                       <button onClick={stopTransmission}>Stop Radio</button>
                     )}
                   </>

@@ -476,6 +476,7 @@ export default function TacpTraining({
     controlPointGrid: "",
     controlPointType: "ip",
     controlPointName: "COD",
+    checkInDeliveryMode: "generatedRadio",
   });
   const [selfSetupControlPoints, setSelfSetupControlPoints] = useState([]);
   const [callsigns, setCallsigns] = useState(() => {
@@ -913,8 +914,11 @@ export default function TacpTraining({
         aircraftLabel,
         controllerCallsign:
           selfSetup.callsign.trim().toUpperCase() || defaultController.callsign,
-        deliveryMode: "generatedText",
-        deliveryLabel: "Generated text",
+        deliveryMode: selfSetup.checkInDeliveryMode,
+        deliveryLabel:
+          checkInDeliveryOptions.find(
+            (option) => option.id === selfSetup.checkInDeliveryMode
+          )?.label || "Generated radio voice",
         manualScenario: null,
         pushedAt: getTimestamp(),
         route: "Aircraft awaiting signaller route to the correct IP/BP.",
@@ -1714,6 +1718,24 @@ export default function TacpTraining({
                 updateSelfSetup("targetDevelopment", event.target.value)
               }
             />
+          </label>
+
+          <label className="field">
+            Aircraft check-in delivery
+            <select
+              value={selfSetup.checkInDeliveryMode}
+              onChange={(event) =>
+                updateSelfSetup("checkInDeliveryMode", event.target.value)
+              }
+            >
+              {checkInDeliveryOptions
+                .filter((option) => option.id !== "dsVoice")
+                .map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+            </select>
           </label>
 
           <div className="briefActions">

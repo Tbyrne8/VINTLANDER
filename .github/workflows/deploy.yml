@@ -25,6 +25,7 @@ jobs:
       - run: npm run build
         env:
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_GOOGLE_TTS_ENDPOINT: ${{ secrets.VITE_GOOGLE_TTS_ENDPOINT }}
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
