@@ -169,6 +169,7 @@ function formatRadioVoiceText(lines) {
         .replace(/\bGBU\b/g, "gee bee you")
         .replace(/\bAGM\b/g, "ay gee emm")
         .replace(/\bSDB\b/g, "ess dee bee")
+        .replace(/\b30\s*MM\b/gi, "thirty mike mike")
         .replace(/\bMQ-9\b/g, "emm queue nine")
         .replace(/\bF-35A\b/g, "eff thirty five alpha")
         .replace(/\bF-35B\b/g, "eff thirty five bravo")
