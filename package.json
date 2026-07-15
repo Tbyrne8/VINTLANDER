@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@vis.gl/react-google-maps": "^1.8.3",
+    "firebase": "^12.16.0",
     "mgrs": "^2.1.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

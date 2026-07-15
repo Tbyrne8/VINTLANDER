@@ -31,6 +31,8 @@ const savedPendingCheckIn = "vintlander.pendingCheckIn";
 const savedControlPoints = "vintlander.controlPoints";
 const savedOpHistory = "vintlander.opHistory";
 const savedMapCenter = "vintlander.mapCenter";
+const savedController = "vintlander.controller";
+const savedCompletedTasks = "vintlander.completedTasks";
 const defaultMapPosition = { lat: 51.38466954999258, lng: -2.3747654912984433 };
 const heightBlockOptions = Array.from({ length: 30 }, (_, index) => {
   const feet = (index + 1) * 1000;
@@ -437,6 +439,7 @@ export default function TacpTraining({
   serialMode = false,
   serialVariant = "ds",
   onExitSerial = () => {},
+  linkedRole = null,
 }) {
   const [logs, setLogs] = useState(() => loadSavedList(savedTrainingLogs));
   const [missionEvents, setMissionEvents] = useState(loadMissionEvents);
@@ -470,8 +473,12 @@ export default function TacpTraining({
     loadSavedList(savedOpHistory)
   );
   const [selectedAircraft, setSelectedAircraft] = useState("random");
-  const [completedTasks, setCompletedTasks] = useState({});
-  const [controller, setController] = useState(defaultController);
+  const [completedTasks, setCompletedTasks] = useState(() =>
+    loadSavedValue(savedCompletedTasks, {})
+  );
+  const [controller, setController] = useState(() =>
+    loadSavedValue(savedController, defaultController)
+  );
   const [debrief, setDebrief] = useState("");
   const [activeView, setActiveView] = useState("trainee");
   const [routePickerOpen, setRoutePickerOpen] = useState(false);
@@ -545,6 +552,45 @@ export default function TacpTraining({
   useEffect(() => {
     window.localStorage.setItem(savedTrainingLogs, JSON.stringify(logs));
   }, [logs]);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedController, JSON.stringify(controller));
+  }, [controller]);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedCompletedTasks, JSON.stringify(completedTasks));
+  }, [completedTasks]);
+
+  useEffect(() => {
+    if (linkedRole === "ds") setActiveView("instructor");
+  }, [linkedRole]);
+
+  useEffect(() => {
+    const applyLinkedState = () => {
+      setLogs(loadSavedList(savedTrainingLogs));
+      setMissionEvents(loadMissionEvents());
+      setTargets(loadSavedList(savedTargets));
+      setObserverPosition(loadSavedValue(savedObserverPosition));
+      setIntelInjects(loadSavedList(savedIntelInjects));
+      setAttackBriefs(loadSavedList(savedAttackBriefs));
+      setTargetStatus(loadSavedValue(savedTargetStatus, {
+        phase: "Intel pending",
+        notes: "No target development activity yet.",
+      }));
+      setAttackStatus(loadSavedValue(savedAttackStatus, defaultAttackStatus));
+      setPendingCheckIn(loadSavedValue(savedPendingCheckIn));
+      setControlPoints(loadSavedList(savedControlPoints));
+      setOpHistory(loadSavedList(savedOpHistory));
+      setCallsigns(() => {
+        const saved = loadSavedList(savedCallsigns);
+        return saved.length ? saved : getDefaultCallsigns();
+      });
+      setController(loadSavedValue(savedController, defaultController));
+      setCompletedTasks(loadSavedValue(savedCompletedTasks, {}));
+    };
+    window.addEventListener("vintlander:linked-sync", applyLinkedState);
+    return () => window.removeEventListener("vintlander:linked-sync", applyLinkedState);
+  }, []);
 
   useEffect(() => {
     const refreshEvents = () => setMissionEvents(loadMissionEvents());

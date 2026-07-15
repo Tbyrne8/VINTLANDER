@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { APIProvider } from "@vis.gl/react-google-maps";
 import "./App.css";
 
@@ -7,6 +7,13 @@ import TacpTraining from "./pages/TacpTraining.jsx";
 import NineLine from "./pages/NineLine.jsx";
 import MapTrainer from "./pages/MapTrainer.jsx";
 import CheckIn from "./pages/CheckIn.jsx";
+import LinkedSerialLauncher from "./components/LinkedSerialLauncher.jsx";
+import {
+  createLinkedSession,
+  joinLinkedSession,
+  publishLinkedState,
+  watchLinkedSession,
+} from "./utils/linkedSession.js";
 
 const savedPlatforms = "vintlander.platforms";
 const savedStandalonePlatforms = "vintlander.standalone.platforms";
@@ -24,6 +31,8 @@ const missionStorageKeys = [
   "vintlander.attackStatus",
   "vintlander.missionEvents",
   "vintlander.controlPoints",
+  "vintlander.controller",
+  "vintlander.completedTasks",
 ];
 const serialStorageKeys = [
   "vintlander.targets",
@@ -36,7 +45,32 @@ const serialStorageKeys = [
   "vintlander.attackStatus",
   "vintlander.missionEvents",
   "vintlander.controlPoints",
+  "vintlander.controller",
+  "vintlander.completedTasks",
 ];
+const linkedStorageKeys = [
+  ...new Set([
+    ...serialStorageKeys,
+    "vintlander.controllerCallsigns",
+    "vintlander.controller",
+    "vintlander.completedTasks",
+    "vintlander.opHistory",
+    "vintlander.mapCenter",
+  ]),
+];
+
+function collectLinkedState(platforms, origin) {
+  const storage = {};
+  linkedStorageKeys.forEach((key) => {
+    const value = window.localStorage.getItem(key);
+    if (value !== null) storage[key] = value;
+  });
+  return { origin, storage, platforms };
+}
+
+function linkedStateSignature(state) {
+  return JSON.stringify({ storage: state?.storage || {}, platforms: state?.platforms || [] });
+}
 
 function loadSavedPlatforms() {
   return loadSavedPlatformList(savedPlatforms);
@@ -63,12 +97,70 @@ export default function App() {
   const [standalonePlatforms, setStandalonePlatforms] = useState(
     loadSavedStandalonePlatforms
   );
+  const [linkedSession, setLinkedSession] = useState(null);
+  const [linkedBusy, setLinkedBusy] = useState(false);
+  const [linkedError, setLinkedError] = useState("");
+  const linkedClientId = useRef(
+    `CLIENT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  );
+  const lastLinkedSignature = useRef("");
+  const platformsRef = useRef(platforms);
   const activePlatforms = serialMode ? platforms : standalonePlatforms;
   const setActivePlatforms = serialMode ? setPlatforms : setStandalonePlatforms;
 
   useEffect(() => {
     window.localStorage.setItem(savedPlatforms, JSON.stringify(platforms));
+    platformsRef.current = platforms;
   }, [platforms]);
+
+  useEffect(() => {
+    if (!linkedSession) return undefined;
+
+    const applyRemoteState = (state, status) => {
+      if (status === "ended") {
+        setLinkedError("The linked serial has been ended by the other laptop.");
+        setLinkedSession(null);
+        return;
+      }
+      if (!state || state.origin === linkedClientId.current) return;
+      linkedStorageKeys.forEach((key) => {
+        if (Object.hasOwn(state.storage || {}, key)) {
+          window.localStorage.setItem(key, state.storage[key]);
+        } else {
+          window.localStorage.removeItem(key);
+        }
+      });
+      if (Array.isArray(state.platforms)) {
+        platformsRef.current = state.platforms;
+        setPlatforms(state.platforms);
+      }
+      lastLinkedSignature.current = linkedStateSignature(state);
+      window.dispatchEvent(new CustomEvent("vintlander:linked-sync"));
+    };
+
+    const stopWatching = watchLinkedSession(
+      linkedSession.code,
+      applyRemoteState,
+      () => setLinkedError("Connection interrupted. Reconnecting…")
+    );
+    const publishTimer = window.setInterval(async () => {
+      const state = collectLinkedState(platformsRef.current, linkedClientId.current);
+      const signature = linkedStateSignature(state);
+      if (signature === lastLinkedSignature.current) return;
+      lastLinkedSignature.current = signature;
+      try {
+        await publishLinkedState(linkedSession.code, state);
+        setLinkedError("");
+      } catch {
+        setLinkedError("Could not send the latest mission update.");
+      }
+    }, 750);
+
+    return () => {
+      stopWatching();
+      window.clearInterval(publishTimer);
+    };
+  }, [linkedSession]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -93,6 +185,54 @@ export default function App() {
     setPage("tacp");
   }
 
+  async function createLinkedSerial() {
+    setLinkedBusy(true);
+    setLinkedError("");
+    try {
+      setSerialVariant("ds");
+      setSerialMode(true);
+      setPage("tacp");
+      const state = collectLinkedState(platforms, linkedClientId.current);
+      const code = await createLinkedSession(state);
+      lastLinkedSignature.current = linkedStateSignature(state);
+      setLinkedSession({ code, role: "trainee" });
+    } catch (error) {
+      setLinkedError(error.message || "Could not create the linked serial.");
+      setSerialMode(false);
+      setPage("home");
+    } finally {
+      setLinkedBusy(false);
+    }
+  }
+
+  async function joinLinkedSerial(code) {
+    setLinkedBusy(true);
+    setLinkedError("");
+    try {
+      const joined = await joinLinkedSession(code);
+      const state = joined.state || {};
+      linkedStorageKeys.forEach((key) => {
+        if (Object.hasOwn(state.storage || {}, key)) {
+          window.localStorage.setItem(key, state.storage[key]);
+        } else {
+          window.localStorage.removeItem(key);
+        }
+      });
+      const joinedPlatforms = Array.isArray(state.platforms) ? state.platforms : [];
+      platformsRef.current = joinedPlatforms;
+      setPlatforms(joinedPlatforms);
+      lastLinkedSignature.current = linkedStateSignature(state);
+      setSerialVariant("ds");
+      setSerialMode(true);
+      setPage("tacp");
+      setLinkedSession({ code: joined.code, role: "ds" });
+    } catch (error) {
+      setLinkedError(error.message || "Could not join the linked serial.");
+    } finally {
+      setLinkedBusy(false);
+    }
+  }
+
   function exitSerial() {
     const resetSerial = window.confirm(
       "Reset this serial before returning to the main menu? Press OK for a fresh serial next time, or Cancel to keep current serial data."
@@ -105,6 +245,7 @@ export default function App() {
 
     setSerialMode(false);
     setSerialVariant("ds");
+    setLinkedSession(null);
     setPage("home");
   }
 
@@ -122,6 +263,15 @@ export default function App() {
   return (
     <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
       <div className={`app ${serialMode ? "serialMode" : ""}`}>
+        {linkedSession && (
+          <div className="linkedSessionBar">
+            <span className="linkedLiveDot" />
+            <strong>LINKED {linkedSession.role === "ds" ? "DS" : "TRAINEE"}</strong>
+            <span>Session {linkedSession.code}</span>
+            {linkedError && <span className="linkedBarError">{linkedError}</span>}
+            <button onClick={() => setLinkedSession(null)}>Leave Link</button>
+          </div>
+        )}
         {!serialMode && (
           <nav className="nav">
             <button onClick={() => goToPage("home")}>Home</button>
@@ -145,12 +295,20 @@ export default function App() {
         )}
 
         {page === "home" && (
-          <Home
-            onNavigate={goToPage}
-            onStartSerial={startFullSerial}
-            onStartSelfLedSerial={startSelfLedSerial}
-            onClearTrainingData={clearTrainingData}
-          />
+          <>
+            <Home
+              onNavigate={goToPage}
+              onStartSerial={startFullSerial}
+              onStartSelfLedSerial={startSelfLedSerial}
+              onClearTrainingData={clearTrainingData}
+            />
+            <LinkedSerialLauncher
+              onCreate={createLinkedSerial}
+              onJoin={joinLinkedSerial}
+              busy={linkedBusy}
+              error={linkedError}
+            />
+          </>
         )}
         {page === "tacp" && (
           <TacpTraining
@@ -160,6 +318,7 @@ export default function App() {
             serialMode={serialMode}
             serialVariant={serialVariant}
             onExitSerial={exitSerial}
+            linkedRole={linkedSession?.role || null}
           />
         )}
         {page === "nine" && (
