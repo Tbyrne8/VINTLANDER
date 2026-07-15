@@ -947,12 +947,14 @@ function getPlatformTrack(platform, anchor, tick) {
   const altitudeProfile = getAltitudeProfile(platform.positionAltitude);
   const platformProfile = getPlatformProfile(platform.aircraft);
   const trackAnchor = platform.routePosition || platform.anchor || anchor;
-  const orbitCenter = getStandoffOrbitCenter(
-    trackAnchor,
-    altitudeProfile,
-    platformProfile
-  );
-  const position = getOrbitPosition(orbitCenter, tick, altitudeProfile, platformProfile);
+  const isRouteHold = Boolean(platform.routePosition);
+  const orbitProfile = isRouteHold
+    ? getRouteHoldProfile(platformProfile)
+    : platformProfile;
+  const orbitCenter = isRouteHold
+    ? trackAnchor
+    : getStandoffOrbitCenter(trackAnchor, altitudeProfile, orbitProfile);
+  const position = getOrbitPosition(orbitCenter, tick, altitudeProfile, orbitProfile);
 
   return {
     id: platform.id,
@@ -960,7 +962,7 @@ function getPlatformTrack(platform, anchor, tick) {
     callsign: platform.callsign,
     aircraft: platform.aircraft,
     altitude: formatPlatformAltitude(platform.positionAltitude),
-    mode: platformProfile.label,
+    mode: isRouteHold ? "IP/BP HOLD" : platformProfile.label,
   };
 }
 
@@ -1270,6 +1272,22 @@ function getStandoffOrbitCenter(anchor, altitudeProfile, platformProfile) {
     anchor,
     ...rotateOffset(standoffMetres, standoffMetres * 0.35, platformProfile.rotation)
   );
+}
+
+function getRouteHoldProfile(platformProfile) {
+  const routeHoldScale =
+    platformProfile.path === "heliPatrol"
+      ? 0.75
+      : platformProfile.path === "uavOrbit"
+        ? 0.9
+        : 1.15;
+
+  return {
+    ...platformProfile,
+    orbitScale: routeHoldScale,
+    drift: Math.min(platformProfile.drift || 0, 80),
+    standoffMetres: 0,
+  };
 }
 
 function getPathPhase(tick, eastAxis, northAxis, platformProfile) {
