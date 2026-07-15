@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { recordMissionEvent } from "../utils/missionEvents.js";
 
 const savedTargets = "vintlander.targets";
 const savedBriefs = "vintlander.attackBriefs";
@@ -167,6 +168,12 @@ export default function NineLine({
     };
 
     setBriefs((current) => [savedBrief, ...current].slice(0, 12));
+    recordMissionEvent({
+      type: "nine-line",
+      title: `9-Line saved for ${savedBrief.platform.callsign}`,
+      detail: `Target ${savedBrief.target.id} / ${savedBrief.brief.controlType}`,
+      data: { brief: savedBrief },
+    });
   }
 
   function deleteBrief(id) {

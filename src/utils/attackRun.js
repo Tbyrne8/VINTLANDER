@@ -39,6 +39,7 @@ function parseAttackHeading(brief) {
 }
 
 export function getAttackRunGeometry(attackStatus, brief, platform, now = Date.now()) {
+  now = attackStatus?.pausedAt || now;
   const target = attackStatus?.attackTarget?.position || brief?.target?.position;
   if (!target) return null;
 

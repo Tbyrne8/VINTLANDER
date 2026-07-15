@@ -5,6 +5,7 @@ import {
 } from "../utils/checkInGenerator.js";
 import { markCheckInField } from "../utils/checkInMarking.js";
 import { formatMgrs } from "../utils/mgrs.js";
+import { recordMissionEvent } from "../utils/missionEvents.js";
 
 const blankCheckIn = {
   aircraftCallsign: "",
@@ -660,6 +661,12 @@ export default function CheckIn({
 
     window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(updatedTasking));
     setPendingCheckIn(updatedTasking);
+    recordMissionEvent({
+      type: "routing",
+      title: `${pendingCheckIn.aircraftLabel || "Aircraft"} routed`,
+      detail: `${routeLabel} / ${formatMgrs(point.position)}`,
+      data: { routeLabel, position: point.position },
+    });
     setRoutePickerOpen(false);
   }
 
@@ -717,6 +724,12 @@ export default function CheckIn({
       ),
       newPlatform,
     ]);
+    recordMissionEvent({
+      type: "checkin",
+      title: `${newPlatform.callsign} checked in`,
+      detail: `${newPlatform.aircraft} / ${newPlatform.positionAltitude}`,
+      data: { platform: newPlatform },
+    });
 
     if (serialMode) {
       window.localStorage.removeItem(savedPendingCheckIn);

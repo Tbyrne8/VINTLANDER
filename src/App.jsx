@@ -22,6 +22,7 @@ const missionStorageKeys = [
   "vintlander.trainingLogs",
   "vintlander.pendingCheckIn",
   "vintlander.attackStatus",
+  "vintlander.missionEvents",
   "vintlander.controlPoints",
 ];
 const serialStorageKeys = [
@@ -33,6 +34,7 @@ const serialStorageKeys = [
   "vintlander.trainingLogs",
   "vintlander.pendingCheckIn",
   "vintlander.attackStatus",
+  "vintlander.missionEvents",
   "vintlander.controlPoints",
 ];
 

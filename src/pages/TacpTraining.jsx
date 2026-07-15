@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Map } from "@vis.gl/react-google-maps";
 import * as mgrs from "mgrs";
 import { formatMgrs, parseMgrs } from "../utils/mgrs.js";
@@ -12,6 +12,12 @@ import ObserverMarker from "../components/ObserverMarker.jsx";
 import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
 import MissionRadioPanel from "../components/MissionRadioPanel.jsx";
 import AttackRunMap from "../components/AttackRunMap.jsx";
+import DsMissionControl from "../components/DsMissionControl.jsx";
+import {
+  clearMissionEvents,
+  loadMissionEvents,
+  recordMissionEvent,
+} from "../utils/missionEvents.js";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -433,6 +439,8 @@ export default function TacpTraining({
   onExitSerial = () => {},
 }) {
   const [logs, setLogs] = useState(() => loadSavedList(savedTrainingLogs));
+  const [missionEvents, setMissionEvents] = useState(loadMissionEvents);
+  const lastAttackEventRef = useRef("");
   const [targets, setTargets] = useState(() => loadSavedList(savedTargets));
   const [observerPosition, setObserverPosition] = useState(() =>
     loadSavedValue(savedObserverPosition)
@@ -537,6 +545,16 @@ export default function TacpTraining({
   useEffect(() => {
     window.localStorage.setItem(savedTrainingLogs, JSON.stringify(logs));
   }, [logs]);
+
+  useEffect(() => {
+    const refreshEvents = () => setMissionEvents(loadMissionEvents());
+    window.addEventListener("vintlander:mission-event", refreshEvents);
+    window.addEventListener("vintlander:mission-events-cleared", refreshEvents);
+    return () => {
+      window.removeEventListener("vintlander:mission-event", refreshEvents);
+      window.removeEventListener("vintlander:mission-events-cleared", refreshEvents);
+    };
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(savedTargets, JSON.stringify(targets));
@@ -718,14 +736,152 @@ export default function TacpTraining({
   const attackRunEndsAt = attackStatus.attackRunStartedAt
     ? attackStatus.attackRunStartedAt + (attackStatus.attackRunDurationMs || 90000)
     : null;
+  const attackTimerNow = attackStatus.pausedAt || attackClock;
   const attackRunRemainingMs = attackRunEndsAt
-    ? Math.max(0, attackRunEndsAt - attackClock)
+    ? Math.max(0, attackRunEndsAt - attackTimerNow)
     : 0;
   const bdaRemainingMs = attackStatus.bdaAvailableAt
-    ? Math.max(0, attackStatus.bdaAvailableAt - attackClock)
+    ? Math.max(0, attackStatus.bdaAvailableAt - attackTimerNow)
     : 0;
   const canSendBda =
     Boolean(attackStatus.bdaAvailableAt) && bdaRemainingMs === 0;
+
+  useEffect(() => {
+    const signature = [
+      attackStatus.phase,
+      attackStatus.weaponReleasedAt,
+      attackStatus.impactObservedAt,
+      attackStatus.weaponOutcome,
+    ].join("|");
+
+    if (
+      signature === lastAttackEventRef.current ||
+      attackStatus.phase === "Attack pending"
+    ) {
+      return;
+    }
+
+    lastAttackEventRef.current = signature;
+    recordMissionEvent({
+      type: attackStatus.phase === "Effects observed" ? "bda" : "attack",
+      title: attackStatus.phase,
+      detail: attackStatus.bda || attackStatus.clearance,
+      severity:
+        ["Abort", "Re-attack required", "Dry / no drop"].includes(attackStatus.phase)
+          ? "warning"
+          : "info",
+      data: {
+        attackStatus,
+        brief: linkedAttackBrief,
+      },
+    });
+  }, [attackStatus, linkedAttackBrief]);
+
+  function handleDsInject(injectId) {
+    const injectDetails = {
+      wrongReadback: ["Wrong readback injected", "Aircraft readback marked incorrect."],
+      lostLaser: ["Laser track lost", "Aircraft reports no spot; clearance withheld."],
+      hungWeapon: ["Hung weapon", "Aircraft unable to release; dry pass initiated."],
+      lowFuel: ["Low fuel state", "Aircraft reports minimum fuel and limited playtime."],
+      civilian: ["Civilian movement", "Civilian movement reported inside the target area."],
+      threat: ["Pop-up threat", "New short-range threat reported near the attack axis."],
+    };
+    const [title, detail] = injectDetails[injectId] || ["DS inject", injectId];
+
+    if (injectId === "wrongReadback") markReadback("Incorrect");
+    if (injectId === "lostLaser") setAttackPhase("In hot");
+    if (injectId === "hungWeapon") setAttackPhase("Dry / no drop");
+    if (injectId === "civilian") {
+      setController((current) => ({
+        ...current,
+        restrictions: `${current.restrictions} CHECK FIRE: civilian movement in target area.`,
+      }));
+    }
+    if (injectId === "threat") {
+      setController((current) => ({
+        ...current,
+        threats: `${current.threats} POP-UP SHORT-RANGE THREAT ON ATTACK AXIS.`,
+      }));
+    }
+
+    recordMissionEvent({
+      type: "inject",
+      title,
+      detail,
+      severity: ["hungWeapon", "civilian", "threat"].includes(injectId)
+        ? "critical"
+        : "warning",
+      data: { injectId, attackStatus },
+    });
+  }
+
+  function forceAttackOutcome(outcome) {
+    const targetPosition =
+      attackStatus.attackTarget?.position || linkedAttackBrief?.target?.position;
+    if (!targetPosition) {
+      alert("Link a 9-Line with a plotted target first.");
+      return;
+    }
+
+    const distance = outcome === "hit" ? 18 : outcome === "near miss" ? 95 : 360;
+    const impactPosition = offsetPosition(targetPosition, distance, distance * 0.35);
+    const now = Date.now();
+    setAttackStatus((current) => ({
+      ...current,
+      phase: outcome === "miss" ? "Re-attack required" : "Effects observed",
+      phaseStartedAt: now,
+      weaponOutcome: outcome,
+      missDistanceMetres: distance,
+      impactPosition,
+      weaponReleasedAt: current.weaponReleasedAt || now - 30000,
+      weaponImpactAt: now,
+      impactObservedAt: now,
+      egressStartedAt: now,
+      bdaAvailableAt: now,
+      bda: formatGeneratedBda(outcome, distance),
+    }));
+  }
+
+  function toggleAttackPause() {
+    const now = Date.now();
+    setAttackStatus((current) => {
+      if (!current.pausedAt) return { ...current, pausedAt: now };
+      const pausedDuration = now - current.pausedAt;
+      const shift = (value) => (value ? value + pausedDuration : value);
+      return {
+        ...current,
+        pausedAt: null,
+        phaseStartedAt: shift(current.phaseStartedAt),
+        attackRunStartedAt: shift(current.attackRunStartedAt),
+        weaponReleasedAt: shift(current.weaponReleasedAt),
+        weaponImpactAt: shift(current.weaponImpactAt),
+        bdaAvailableAt: shift(current.bdaAvailableAt),
+        egressStartedAt: shift(current.egressStartedAt),
+      };
+    });
+  }
+
+  function accelerateAttackTiming(factor) {
+    const now = Date.now();
+    const accelerate = (value) =>
+      value && value > now ? now + Math.max(1000, (value - now) * factor) : value;
+    setAttackStatus((current) => ({
+      ...current,
+      weaponImpactAt: accelerate(current.weaponImpactAt),
+      bdaAvailableAt: accelerate(current.bdaAvailableAt),
+    }));
+    recordMissionEvent({
+      type: "inject",
+      title: `DS timing set to ${Math.round(1 / factor)}X`,
+      detail: "Remaining weapon and BDA timers accelerated.",
+    });
+  }
+
+  function clearDsTimeline() {
+    if (!window.confirm("Clear the DS mission timeline and replay history?")) return;
+    clearMissionEvents();
+    setMissionEvents([]);
+  }
 
   function updateController(field, value) {
     setController((current) => ({ ...current, [field]: value }));
@@ -1518,6 +1674,12 @@ export default function TacpTraining({
     };
 
     setPendingCheckIn(updatedTasking);
+    recordMissionEvent({
+      type: "routing",
+      title: `${pendingCheckIn.aircraftLabel || "Aircraft"} routed`,
+      detail: `${routeLabel} / ${formatMgrs(point.position)}`,
+      data: { routeLabel, position: point.position },
+    });
     setRoutePickerOpen(false);
   }
 
@@ -2488,6 +2650,18 @@ export default function TacpTraining({
 
       {activeView === "instructor" && (
         <>
+          <DsMissionControl
+            events={missionEvents}
+            attackStatus={attackStatus}
+            linkedBrief={linkedAttackBrief}
+            platform={linkedAttackBrief?.platform || selectedAttackPlatform}
+            onInject={handleDsInject}
+            onForceOutcome={forceAttackOutcome}
+            onTogglePause={toggleAttackPause}
+            onAccelerate={accelerateAttackTiming}
+            onClearEvents={clearDsTimeline}
+          />
+
           <section className="trainingGrid">
             <div className="card serialControl">
               <h2>Serial Setup</h2>

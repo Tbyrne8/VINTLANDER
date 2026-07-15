@@ -2007,3 +2007,149 @@ select {
   45% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1.18); }
 }
+
+.dsMissionControl {
+  margin-bottom: 20px;
+  border-color: rgba(255, 176, 32, 0.42);
+}
+
+.dsControlHeader,
+.dsReplayHeader,
+.dsTimelineHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.dsControlHeader h2 {
+  margin: 4px 0 0;
+}
+
+.dsMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.dsMetricGrid div {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid rgba(126, 200, 255, 0.22);
+  border-radius: 7px;
+  background: rgba(2, 14, 20, 0.72);
+}
+
+.dsMetricGrid span,
+.dsMetricGrid strong {
+  font-family: "Roboto Mono", monospace;
+}
+
+.dsMetricGrid span {
+  color: #8fbac5;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.dsControlGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.dsInjectGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.dangerButton {
+  border-color: rgba(255, 79, 79, 0.65) !important;
+  color: #ffd3d3 !important;
+}
+
+.dsReplayPanel {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid rgba(126, 200, 255, 0.25);
+  border-radius: 9px;
+  background: rgba(2, 13, 19, 0.72);
+}
+
+.dsReplaySlider {
+  width: 100%;
+  margin: 12px 0 2px;
+}
+
+.dsTimelineHeader {
+  margin: 18px 0 10px;
+  align-items: flex-end;
+}
+
+.dsTimelineHeader .briefActions {
+  flex-wrap: wrap;
+}
+
+.dsTimeline {
+  display: grid;
+  gap: 7px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.dsTimelineEvent {
+  display: grid;
+  grid-template-columns: 82px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-left: 3px solid #54b7d3;
+  border-radius: 5px;
+  background: rgba(4, 20, 27, 0.82);
+}
+
+.dsTimelineEvent.warning {
+  border-left-color: #ffb020;
+}
+
+.dsTimelineEvent.critical {
+  border-left-color: #ff4f4f;
+  background: rgba(56, 13, 16, 0.55);
+}
+
+.dsTimelineEvent time,
+.dsTimelineEvent small {
+  color: #83aeb8;
+  font-family: "Roboto Mono", monospace;
+  font-size: 0.67rem;
+}
+
+.dsTimelineEvent div {
+  display: grid;
+  gap: 2px;
+}
+
+.dsTimelineEvent span {
+  color: #a9c9d0;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 720px) {
+  .dsControlHeader,
+  .dsReplayHeader,
+  .dsTimelineHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dsTimelineEvent {
+    grid-template-columns: 70px 1fr;
+  }
+
+  .dsTimelineEvent > small {
+    display: none;
+  }
+}

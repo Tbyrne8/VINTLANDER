@@ -20,6 +20,7 @@ import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
 import ControlPointLocator from "../components/ControlPointLocator.jsx";
 import PendingRouteLine from "../components/PendingRouteLine.jsx";
 import AttackRunMarkers from "../components/AttackRunMarkers.jsx";
+import { recordMissionEvent } from "../utils/missionEvents.js";
 
 const savedTargets = "vintlander.targets";
 const savedObserverPosition = "vintlander.observerPosition";
@@ -484,6 +485,12 @@ export default function MapTrainer({
 
     window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(updatedTasking));
     setPendingCheckIn(updatedTasking);
+    recordMissionEvent({
+      type: "routing",
+      title: `${pendingCheckIn.aircraftLabel || "Aircraft"} routed`,
+      detail: `${routeLabel} / ${formatMgrs(point.position)}`,
+      data: { routeLabel, position: point.position },
+    });
     setMissionAnchor(point.position);
     setPosition(point.position);
     setMapResetKey((current) => current + 1);
@@ -512,6 +519,12 @@ export default function MapTrainer({
           : platform
       )
     );
+    recordMissionEvent({
+      type: "routing",
+      title: `${platform.callsign || platform.aircraft} rerouted`,
+      detail: `${routeLabel} / ${formatMgrs(point.position)}`,
+      data: { routeLabel, position: point.position, platformId },
+    });
   }
 
   function routeCheckedInPlatform(platformId, pointId) {
