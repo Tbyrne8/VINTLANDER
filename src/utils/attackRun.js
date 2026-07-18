@@ -38,6 +38,21 @@ function parseAttackHeading(brief) {
   return Number.isFinite(heading) ? heading % 360 : 45;
 }
 
+function usesDefaultReturnRoute(attackStatus, brief) {
+  const egressInstruction = String(
+    brief?.brief?.egress || brief?.egress || "AS DIRECTED"
+  ).trim().toUpperCase();
+  const defaultEgress =
+    !egressInstruction ||
+    egressInstruction === "AS DIRECTED" ||
+    /\b(RETURN|IP|BP|HOLD|ON STATION)\b/.test(egressInstruction);
+  const reattackRequested = /RE-?ATTACK REQUESTED/i.test(
+    String(attackStatus?.reattack || "")
+  );
+
+  return defaultEgress && !reattackRequested;
+}
+
 export function getAttackRunGeometry(attackStatus, brief, platform, now = Date.now()) {
   now = attackStatus?.pausedAt || now;
   const target = attackStatus?.attackTarget?.position || brief?.target?.position;
@@ -63,7 +78,21 @@ export function getAttackRunGeometry(attackStatus, brief, platform, now = Date.n
     routeFrom = entry;
     routeTo = release;
     aircraftPosition = interpolate(entry, release, clamp(phaseElapsed / 16000));
-  } else if (["Weapon away", "Effects observed", "Re-attack required"].includes(phase)) {
+  } else if (phase === "Effects observed") {
+    const returnElapsed = Math.max(
+      0,
+      now - (attackStatus.egressStartedAt || attackStatus.phaseStartedAt || now)
+    );
+    if (returnElapsed < 18000 || !usesDefaultReturnRoute(attackStatus, brief)) {
+      routeFrom = release;
+      routeTo = egress;
+      aircraftPosition = interpolate(release, egress, clamp(returnElapsed / 18000));
+    } else {
+      routeFrom = egress;
+      routeTo = hold;
+      aircraftPosition = interpolate(egress, hold, clamp((returnElapsed - 18000) / 24000));
+    }
+  } else if (["Weapon away", "Re-attack required"].includes(phase)) {
     routeFrom = release;
     routeTo = egress;
     const egressElapsed = Math.max(
@@ -75,6 +104,10 @@ export function getAttackRunGeometry(attackStatus, brief, platform, now = Date.n
     routeFrom = entry;
     routeTo = hold;
     aircraftPosition = interpolate(entry, hold, clamp(phaseElapsed / 18000));
+  } else if (phase === "On station") {
+    routeFrom = hold;
+    routeTo = hold;
+    aircraftPosition = hold;
   }
 
   const weaponReleasedAt = attackStatus?.weaponReleasedAt;

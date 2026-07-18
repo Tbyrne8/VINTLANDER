@@ -9,7 +9,7 @@ function radioText(value = "") {
     .replace(/\bMGRS\b/gi, "em gee arr ess")
     .replace(/\bIP\b/g, "eye pee")
     .replace(/\bBP\b/g, "bee pee")
-    .replace(/\bBDA\b/g, "bee dee ay")
+    .replace(/\bBDA\b/g, "bee dee ayy")
     .replace(/\bPID\b/g, "pee eye dee")
     .replace(/\bIR\b/g, "eye arr")
     .replace(/\bBOT\b/g, "bee oh tee")
@@ -131,6 +131,12 @@ export default function MissionRadioPanel({
     setSequenceStage("tasking");
     setCurrentCall("Standby");
   }, [platform?.callsign, target?.id]);
+  useEffect(() => {
+    if (attackStatus.phase === "On station") {
+      setSequenceStage("tasking");
+      setCurrentCall("Standby");
+    }
+  }, [attackStatus.phase]);
 
   function stopPlayback() {
     window.speechSynthesis?.cancel();

@@ -342,6 +342,7 @@ export default function App() {
             setPlatforms={setActivePlatforms}
             onNavigate={goToPage}
             serialMode={serialMode}
+            serialVariant={serialVariant}
           />
         )}
       </div>

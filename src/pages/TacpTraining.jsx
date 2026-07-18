@@ -207,7 +207,10 @@ const attackStatuses = [
   "Dry / no drop",
   "Effects observed",
   "Re-attack required",
+  "On station",
 ];
+
+const attackReturnToHoldMs = 42000;
 
 const defaultAttackStatus = {
   phase: "Attack pending",
@@ -432,6 +435,31 @@ function offsetPosition(center, eastMetres, northMetres) {
   };
 }
 
+function createSelfLedTarget(opPosition, existingTargets) {
+  const bearing = Math.random() * Math.PI * 2;
+  const distanceMetres = 1500 + Math.random() * 2000;
+  const position = offsetPosition(
+    opPosition,
+    Math.sin(bearing) * distanceMetres,
+    Math.cos(bearing) * distanceMetres
+  );
+  const nextNumber =
+    existingTargets.reduce((highest, target) => {
+      const number = Number(String(target.id || "").match(/^TGT-(\d+)$/)?.[1]);
+      return Number.isFinite(number) ? Math.max(highest, number) : highest;
+    }, 0) + 1;
+
+  return {
+    id: `TGT-${String(nextNumber).padStart(3, "0")}`,
+    description: "Enemy position for self-led target development",
+    type: "enemy",
+    position,
+    mgrs: mgrs.forward([position.lng, position.lat]),
+    createdAt: getTimestamp(),
+    source: "SELF-LED AUTO",
+  };
+}
+
 export default function TacpTraining({
   platforms = [],
   setPlatforms = () => {},
@@ -562,7 +590,11 @@ export default function TacpTraining({
   }, [completedTasks]);
 
   useEffect(() => {
-    if (linkedRole === "ds") setActiveView("instructor");
+    if (linkedRole === "ds") {
+      setActiveView("instructor");
+    } else if (linkedRole === "trainee") {
+      setActiveView("trainee");
+    }
   }, [linkedRole]);
 
   useEffect(() => {
@@ -791,6 +823,74 @@ export default function TacpTraining({
     : 0;
   const canSendBda =
     Boolean(attackStatus.bdaAvailableAt) && bdaRemainingMs === 0;
+
+  useEffect(() => {
+    if (attackStatus.phase !== "Effects observed" || !attackStatus.egressStartedAt) {
+      return;
+    }
+
+    const egressInstruction = String(
+      linkedAttackBrief?.brief?.egress || "AS DIRECTED"
+    ).trim().toUpperCase();
+    const usesDefaultEgress =
+      !egressInstruction ||
+      egressInstruction === "AS DIRECTED" ||
+      /\b(RETURN|IP|BP|HOLD|ON STATION)\b/.test(egressInstruction);
+    const reattackRequested = /RE-?ATTACK REQUESTED/i.test(
+      String(attackStatus.reattack || "")
+    );
+
+    if (
+      !usesDefaultEgress ||
+      reattackRequested ||
+      attackTimerNow - attackStatus.egressStartedAt < attackReturnToHoldMs
+    ) {
+      return;
+    }
+
+    const callsign = attackStatus.attackPlatform?.callsign;
+    const controlPoint = linkedAttackBrief?.platform?.routedControlPoint;
+    const routePosition =
+      controlPoint?.position ||
+      linkedAttackBrief?.platform?.routePosition ||
+      attackStatus.attackPlatform?.routePosition;
+    const routeLabel = controlPoint?.label || controlPoint?.name || "ORIGINATING IP/BP";
+
+    setPlatforms((current) =>
+      current.map((platform) =>
+        platform.callsign === callsign
+          ? {
+              ...platform,
+              routePosition: routePosition || platform.routePosition,
+              routeStatus: `ESTABLISHED IN ${routeLabel}`,
+              status: "CHECKED IN / ON STATION",
+              routeStartedAt: null,
+            }
+          : platform
+      )
+    );
+    setAttackStatus((current) => ({
+      ...current,
+      phase: "On station",
+      phaseStartedAt: Date.now(),
+      clearance: "Not cleared",
+      linkedBriefId: "",
+      attackRunStartedAt: null,
+      bdaAvailableAt: null,
+      bda: `${callsign || "Aircraft"} returned to ${routeLabel} and resumed normal tasking.`,
+      attackPlatform: current.attackPlatform
+        ? { ...current.attackPlatform, routePosition }
+        : current.attackPlatform,
+    }));
+  }, [
+    attackStatus.attackPlatform,
+    attackStatus.egressStartedAt,
+    attackStatus.phase,
+    attackStatus.reattack,
+    attackTimerNow,
+    linkedAttackBrief,
+    setPlatforms,
+  ]);
 
   useEffect(() => {
     const signature = [
@@ -1109,6 +1209,8 @@ export default function TacpTraining({
   function startSelfLedGeneratedSerial() {
     try {
       const opPosition = parseMgrs(selfSetup.opGrid);
+      const selfLedTarget = createSelfLedTarget(opPosition, targets);
+      const updatedTargets = [...targets, selfLedTarget];
       const setupControlPoints =
         selfSetupControlPoints.length > 0
           ? selfSetupControlPoints
@@ -1147,8 +1249,10 @@ export default function TacpTraining({
       };
 
       setObserverPosition(opPosition);
+      setTargets(updatedTargets);
       window.localStorage.setItem(savedObserverPosition, JSON.stringify(opPosition));
       window.localStorage.setItem(savedMapCenter, JSON.stringify(opPosition));
+      window.localStorage.setItem(savedTargets, JSON.stringify(updatedTargets));
       rememberOp(selfSetup.opName, opPosition);
       setControlPoints(setupControlPoints);
       window.localStorage.setItem(
@@ -1166,10 +1270,16 @@ export default function TacpTraining({
         opTasking: `OP set during self-led setup: ${formatMgrs(opPosition)}.`,
       }));
       setTargetStatus({
-        phase: "OP plotted",
-        notes: `Self-led setup complete. OP ${formatMgrs(opPosition)} and ${setupControlPoints.length} IP/BP ready.`,
-        completed: ["OP plotted"],
+        phase: "Target plotted",
+        notes: `Self-led setup complete. OP ${formatMgrs(opPosition)}, ${setupControlPoints.length} IP/BP and ${selfLedTarget.id} ready.`,
+        completed: ["OP plotted", "Target plotted"],
         intelAlert: false,
+      });
+      recordMissionEvent({
+        type: "target",
+        title: `${selfLedTarget.id} generated near the OP`,
+        detail: `${selfLedTarget.description} / ${selfLedTarget.mgrs}`,
+        data: { target: selfLedTarget },
       });
       window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(tasking));
       setPendingCheckIn(tasking);
@@ -1566,6 +1676,7 @@ export default function TacpTraining({
       : bdaEffect;
     const bda = `${platformCallsign}: ${generatedEffect}. ${bdaText || "No further BDA."}`;
 
+    const now = Date.now();
     setAttackStatus((current) => ({
       ...current,
       phase:
@@ -1576,6 +1687,8 @@ export default function TacpTraining({
       effect: generatedEffect,
       reattack: reattackDecision,
       bdaAvailableAt: null,
+      phaseStartedAt: now,
+      egressStartedAt: now,
     }));
     setCompletedTasks((current) => ({
       ...current,
@@ -1665,6 +1778,7 @@ export default function TacpTraining({
     const requiresReattack = outcome === "miss";
     const bda = `${platformCallsign}: ${generatedEffect} on ${targetId}. ${requiresReattack ? "Re-attack required." : "No re-attack required."}`;
 
+    const now = Date.now();
     setAttackStatus((current) => ({
       ...current,
       phase: requiresReattack ? "Re-attack required" : "Effects observed",
@@ -1672,6 +1786,8 @@ export default function TacpTraining({
       effect: generatedEffect,
       reattack: requiresReattack ? "Re-attack requested" : "No re-attack required",
       bdaAvailableAt: null,
+      phaseStartedAt: now,
+      egressStartedAt: now,
     }));
     setCompletedTasks((current) => ({
       ...current,
@@ -2073,12 +2189,14 @@ export default function TacpTraining({
         >
           Exercising Troop
         </button>
-        <button
-          className={activeView === "instructor" ? "active" : ""}
-          onClick={() => setActiveView("instructor")}
-        >
-          DS / Instructor
-        </button>
+        {linkedRole !== "trainee" && (
+          <button
+            className={activeView === "instructor" ? "active" : ""}
+            onClick={() => setActiveView("instructor")}
+          >
+            DS / Instructor
+          </button>
+        )}
         <button
           className={activeView === "platforms" ? "active" : ""}
           onClick={() => setActiveView("platforms")}
@@ -2694,7 +2812,7 @@ export default function TacpTraining({
         </>
       )}
 
-      {activeView === "instructor" && (
+      {activeView === "instructor" && linkedRole !== "trainee" && (
         <>
           <DsMissionControl
             events={missionEvents}

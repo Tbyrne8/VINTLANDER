@@ -337,6 +337,7 @@ export default function CheckIn({
   setPlatforms,
   onNavigate = () => {},
   serialMode = false,
+  serialVariant = "ds",
 }) {
   const [selectedAircraft, setSelectedAircraft] = useState("random");
   const [scenario, setScenario] = useState(firstScenario);
@@ -734,6 +735,10 @@ export default function CheckIn({
     if (serialMode) {
       window.localStorage.removeItem(savedPendingCheckIn);
       setPendingCheckIn(null);
+    }
+
+    if (serialMode && serialVariant === "self") {
+      onNavigate("map");
     }
   }
 

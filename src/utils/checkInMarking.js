@@ -68,10 +68,6 @@ function tokens(value) {
   return normalise(value).split(/[ ,./()-]+/).filter(Boolean);
 }
 
-function containsAny(value, options) {
-  return options.some((option) => value.includes(option));
-}
-
 function extractDirection(value) {
   const userTokens = tokens(value);
 
@@ -84,25 +80,48 @@ function extractDirection(value) {
 }
 
 function extractAltitude(value) {
-  const compact = value.replace(/\s/g, "");
-
-  if (compact.includes("ANGELS10") || compact.includes("A10") || compact.includes("10000")) return "10";
-  if (compact.includes("ANGELS15") || compact.includes("A15") || compact.includes("15000")) return "15";
-  if (compact.includes("ANGELS18") || compact.includes("A18") || compact.includes("18000")) return "18";
-  if (compact.includes("ANGELS20") || compact.includes("A20") || compact.includes("20000")) return "20";
-  if (compact.includes("ANGELS22") || compact.includes("A22") || compact.includes("22000")) return "22";
-  if (compact.includes("ANGELS25") || compact.includes("A25") || compact.includes("25000")) return "25";
+  const converted = wordsToDigits(normalise(value));
+  const compact = converted.replace(/[ ,.-]/g, "");
 
   if (compact.includes("LOWLEVEL")) return "LOW LEVEL";
-  if (compact.includes("500FT") || compact === "500") return "500 FT";
-  if (compact.includes("1000FT") || compact === "1000") return "1000 FT";
+
+  const angels = compact.match(/(?:ANGELS?|A)(\d{1,2})(?!\d)/);
+  if (angels) return String(Number(angels[1]) * 1000);
+
+  const feet = compact.match(/(\d{3,5})(?:FT|FEET|FOOT)?/);
+  if (feet) return String(Number(feet[1]));
 
   return null;
 }
 
-function hasAllImportantWords(userValue, correctValue) {
+function positionMatches(userValue, correctValue) {
   const user = normalise(userValue);
   const correct = normalise(correctValue);
+  const correctDirection = extractDirection(correct);
+
+  if (correctDirection) return extractDirection(user) === correctDirection;
+
+  const correctPosition = correct.split(",")[0];
+  const positionWords = tokens(correctPosition).filter(
+    (word) =>
+      ![
+        "CURRENTLY",
+        "HOLDING",
+        "ESTABLISHED",
+        "IN",
+        "ROUTING",
+        "TO",
+        "REQUESTING",
+        "CLEARANCE",
+      ].includes(word)
+  );
+
+  return positionWords.length > 0 && positionWords.every((word) => user.includes(word));
+}
+
+function hasAllImportantWords(userValue, correctValue) {
+  const user = wordsToDigits(normalise(userValue));
+  const correct = wordsToDigits(normalise(correctValue));
 
   if (correct.includes("GUN") && !user.includes("GUN")) {
     return false;
@@ -141,12 +160,13 @@ export function markCheckInField(field, userValue, correctValue) {
 
 if (field === "aircraftNumberType") {
   const correctNumber = numbersOnly(correct);
+  const numberedUser = wordsToDigits(user);
 
   const typeWords = tokens(correct).filter(
     (word) => !["1", "2", "X"].includes(word)
   );
 
-  const typeMatches = typeWords.every((word) => user.includes(word));
+  const typeMatches = typeWords.every((word) => numberedUser.includes(word));
 
   // If it is only 1 aircraft, accepting just the aircraft type is okay
   if (correctNumber.startsWith("1") && typeMatches) {
@@ -154,21 +174,20 @@ if (field === "aircraftNumberType") {
   }
 
   const numberMatches =
-    user.includes(correctNumber[0]) ||
-    (correct.includes("2") && user.includes("TWO")) ||
-    (correct.includes("1") && user.includes("ONE"));
+    numberedUser.includes(correctNumber[0]);
 
   return numberMatches && typeMatches;
 }
 
   if (field === "positionAltitude") {
-    const userDirection = extractDirection(user);
-    const correctDirection = extractDirection(correct);
-
     const userAltitude = extractAltitude(user);
     const correctAltitude = extractAltitude(correct);
 
-    return userDirection === correctDirection && userAltitude === correctAltitude;
+    return (
+      positionMatches(user, correct) &&
+      userAltitude !== null &&
+      userAltitude === correctAltitude
+    );
   }
 
   if (field === "playtime") {
@@ -214,19 +233,7 @@ if (field === "aircraftNumberType") {
   return user === correct;
 }
 if (field === "abortCode") {
-  const userLetters = user
-    .split(/[ ,./()-]+/)
-    .filter(Boolean)
-    .map((word) => word[0])
-    .join("");
-
-  const correctLetters = correct
-    .split(/[ ,./()-]+/)
-    .filter(Boolean)
-    .map((word) => word[0])
-    .join("");
-
-  return user === correct || userLetters === correctLetters;
+  return lettersToInitials(user) === lettersToInitials(correct);
 }
   return user === correct;
 }
