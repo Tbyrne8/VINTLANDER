@@ -20,20 +20,24 @@ import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
 import ControlPointLocator from "../components/ControlPointLocator.jsx";
 import PendingRouteLine from "../components/PendingRouteLine.jsx";
 import AttackRunMarkers from "../components/AttackRunMarkers.jsx";
+import ArtilleryOverlay from "../components/ArtilleryOverlay.jsx";
 import { recordMissionEvent } from "../utils/missionEvents.js";
 
 const savedTargets = "vintlander.targets";
 const savedObserverPosition = "vintlander.observerPosition";
 const savedControlPoints = "vintlander.controlPoints";
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
+const savedStagedCheckIn = "vintlander.stagedCheckIn";
 const savedMapCenter = "vintlander.mapCenter";
 const savedAttackStatus = "vintlander.attackStatus";
 const savedAttackBriefs = "vintlander.attackBriefs";
+const savedArtillery = "vintlander.artillery";
 const standaloneStorageKeys = {
   targets: "vintlander.standalone.targets",
   observerPosition: "vintlander.standalone.observerPosition",
   controlPoints: "vintlander.standalone.controlPoints",
   mapCenter: "vintlander.standalone.mapCenter",
+  artillery: "vintlander.standalone.artillery",
 };
 const defaultMapPosition = { lat: 51.38466954999258, lng: -2.3747654912984433 };
 const heightBlockOptions = Array.from({ length: 30 }, (_, index) => {
@@ -59,6 +63,7 @@ function getMapStorageKeys(serialMode) {
         observerPosition: savedObserverPosition,
         controlPoints: savedControlPoints,
         mapCenter: savedMapCenter,
+        artillery: savedArtillery,
       }
     : standaloneStorageKeys;
 }
@@ -99,9 +104,27 @@ function loadSavedControlPoints(storageKeys) {
   }
 }
 
+function loadSavedArtillery(storageKeys) {
+  try {
+    const saved = window.localStorage.getItem(storageKeys.artillery);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
 function loadPendingCheckIn() {
   try {
     const saved = window.localStorage.getItem(savedPendingCheckIn);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadStagedCheckIn() {
+  try {
+    const saved = window.localStorage.getItem(savedStagedCheckIn);
     return saved ? JSON.parse(saved) : null;
   } catch {
     return null;
@@ -143,6 +166,9 @@ export default function MapTrainer({
   const [controlPointType, setControlPointType] = useState("ip");
   const [controlPointName, setControlPointName] = useState("");
   const [controlPointGrid, setControlPointGrid] = useState("");
+  const [artillery, setArtillery] = useState(() => loadSavedArtillery(storageKeys));
+  const [artilleryName, setArtilleryName] = useState("");
+  const [artilleryGrid, setArtilleryGrid] = useState("");
   const [showObserverLine, setShowObserverLine] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [airPlatformPosition, setAirPlatformPosition] = useState(null);
@@ -152,6 +178,10 @@ export default function MapTrainer({
   const [pendingCheckIn, setPendingCheckIn] = useState(() =>
     serialMode ? loadPendingCheckIn() : null
   );
+  const [stagedCheckIn, setStagedCheckIn] = useState(() =>
+    serialMode ? loadStagedCheckIn() : null
+  );
+  const [mapReadyControlPointId, setMapReadyControlPointId] = useState("");
   const [missionAnchor, setMissionAnchor] = useState(position);
   const [airPictureTick, setAirPictureTick] = useState(0);
   const attackStatus = serialMode
@@ -235,6 +265,29 @@ export default function MapTrainer({
       JSON.stringify(controlPoints)
     );
   }, [controlPoints, storageKeys.controlPoints]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.artillery, JSON.stringify(artillery));
+  }, [artillery, storageKeys.artillery]);
+
+  useEffect(() => {
+    if (!stagedCheckIn || mapReadyControlPointId) return;
+    const firstSuitablePoint = getRouteableControlPoints(
+      controlPoints,
+      stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId
+    )[0];
+    if (firstSuitablePoint) setMapReadyControlPointId(firstSuitablePoint.id);
+  }, [controlPoints, mapReadyControlPointId, stagedCheckIn]);
+
+  useEffect(() => {
+    if (!serialMode) return undefined;
+    const refreshLinkedMapState = () => {
+      setArtillery(loadSavedArtillery(storageKeys));
+      setStagedCheckIn(loadStagedCheckIn());
+    };
+    window.addEventListener("vintlander:linked-sync", refreshLinkedMapState);
+    return () => window.removeEventListener("vintlander:linked-sync", refreshLinkedMapState);
+  }, [serialMode, storageKeys]);
 
   useEffect(() => {
     if (
@@ -403,6 +456,7 @@ export default function MapTrainer({
     setTargets([]);
     setObserverPosition(null);
     setControlPoints([]);
+    setArtillery([]);
   }
 
   function buildControlPoint(pointPosition) {
@@ -443,6 +497,74 @@ export default function MapTrainer({
     setControlPoints((current) =>
       current.filter((point) => point.id !== pointId)
     );
+  }
+
+  function plotArtilleryPosition() {
+    try {
+      const gunPosition = parseMgrs(artilleryGrid);
+      const item = {
+        id: `ARTY-${Date.now()}`,
+        name: artilleryName.trim().toUpperCase() || `GUNS ${artillery.length + 1}`,
+        gunPosition,
+        gunMgrs: mgrs.forward([gunPosition.lng, gunPosition.lat]),
+        targetPosition: null,
+        createdAt: new Date().toLocaleTimeString(),
+        source: "MAP PLOT",
+      };
+      setArtillery((current) => [...current, item]);
+      setArtilleryName("");
+      setArtilleryGrid("");
+      setPosition(gunPosition);
+      recordMissionEvent({
+        type: "artillery",
+        title: `${item.name} plotted`,
+        detail: `Artillery position ${formatMgrs(gunPosition)} for deconfliction.`,
+        data: { artillery: item },
+      });
+    } catch {
+      alert("Invalid artillery MGRS grid.");
+    }
+  }
+
+  function deleteArtillery(itemId) {
+    setArtillery((current) => current.filter((item) => item.id !== itemId));
+  }
+
+  function confirmMapReady() {
+    if (!stagedCheckIn) return;
+    const point = controlPoints.find((item) => item.id === mapReadyControlPointId);
+    if (!point) {
+      alert("Add and select a suitable IP/BP before confirming the map.");
+      return;
+    }
+    const routeLabel = formatControlPointLabel(point);
+    const tasking = {
+      ...stagedCheckIn,
+      pushedAt: new Date().toLocaleTimeString(),
+      route: `Aircraft cleared to ${routeLabel}. Await established call.`,
+      routeStatus: `ROUTING TO ${routeLabel}`,
+      clearanceRequested: false,
+      routedControlPoint: {
+        id: point.id,
+        type: point.type,
+        name: point.name,
+        label: routeLabel,
+        position: point.position,
+        mgrs: point.mgrs,
+      },
+      routePosition: point.position,
+      routeAltitude:
+        stagedCheckIn.routeAltitude ||
+        getDefaultRouteAltitude(stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId),
+      routeStartedAt: Date.now(),
+      inboundStartPosition: getInboundStartPosition(point.position),
+      routedAt: new Date().toLocaleTimeString(),
+    };
+    window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(tasking));
+    window.localStorage.removeItem(savedStagedCheckIn);
+    setPendingCheckIn(tasking);
+    setStagedCheckIn(null);
+    onNavigate("checkin");
   }
 
   function routePendingAircraft(point) {
@@ -604,6 +726,34 @@ export default function MapTrainer({
           mapResetKey={mapResetKey}
           setMapResetKey={setMapResetKey}
         />
+
+        {serialMode && stagedCheckIn && (
+          <div className="serialCard routeCard">
+            <small>MAP REVIEW BEFORE CHECK-IN</small>
+            <p>
+              Review the OP, IP/BPs, targets and deconfliction hazards. Add or adjust
+              positions before pushing {stagedCheckIn.aircraftLabel}.
+            </p>
+            <label className="field">
+              Initial aircraft IP/BP
+              <select
+                value={mapReadyControlPointId}
+                onChange={(event) => setMapReadyControlPointId(event.target.value)}
+              >
+                <option value="">Select IP/BP</option>
+                {getRouteableControlPoints(
+                  controlPoints,
+                  stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId
+                ).map((point) => (
+                  <option key={point.id} value={point.id}>
+                    {formatControlPointLabel(point)} / {formatMgrs(point.position)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button onClick={confirmMapReady}>Map Ready — Push Aircraft To Check-In</button>
+          </div>
+        )}
 
         <TargetData position={position} zoom={zoom} mapType={mapType} />
 
@@ -808,6 +958,38 @@ export default function MapTrainer({
           )}
         </div>
 
+        <div className="controlPointPanel">
+          <h2>ARTILLERY / GUN-TARGET LINES</h2>
+          <p>Plot a reported gun grid to support airspace deconfliction.</p>
+          <label className="field">
+            Unit / callsign
+            <input
+              value={artilleryName}
+              onChange={(event) => setArtilleryName(event.target.value.toUpperCase())}
+              placeholder="Example: GUNS 1"
+            />
+          </label>
+          <label className="field">
+            Artillery MGRS
+            <input
+              value={artilleryGrid}
+              onChange={(event) => setArtilleryGrid(event.target.value.toUpperCase())}
+              placeholder="Example: 30U XB 12345 67890"
+            />
+          </label>
+          <button onClick={plotArtilleryPosition}>Plot Artillery Position</button>
+          {artillery.map((item) => (
+            <div key={item.id} className="dataRow">
+              <span>{item.name}</span>
+              <strong>{item.targetPosition ? "GTL ACTIVE" : "GUN GRID"}</strong>
+              <small>{formatMgrs(item.gunPosition)}</small>
+              <button className="removeControlPoint" onClick={() => deleteArtillery(item.id)}>
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+
         <TargetRegister
           targets={targets}
           setTargets={setTargets}
@@ -906,6 +1088,7 @@ export default function MapTrainer({
             now={Date.now()}
           />
           <ControlPointMarkers controlPoints={controlPoints} />
+          <ArtilleryOverlay artillery={artillery} />
           <ObserverMarker observerPosition={observerPosition} />
           <ObserverLine
             observerPosition={observerPosition}

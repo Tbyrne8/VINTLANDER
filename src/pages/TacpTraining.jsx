@@ -13,6 +13,7 @@ import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
 import MissionRadioPanel from "../components/MissionRadioPanel.jsx";
 import AttackRunMap from "../components/AttackRunMap.jsx";
 import DsMissionControl from "../components/DsMissionControl.jsx";
+import ArtilleryOverlay from "../components/ArtilleryOverlay.jsx";
 import {
   clearMissionEvents,
   loadMissionEvents,
@@ -28,9 +29,11 @@ const savedTargetStatus = "vintlander.targetDevelopmentStatus";
 const savedAttackBriefs = "vintlander.attackBriefs";
 const savedAttackStatus = "vintlander.attackStatus";
 const savedPendingCheckIn = "vintlander.pendingCheckIn";
+const savedStagedCheckIn = "vintlander.stagedCheckIn";
 const savedControlPoints = "vintlander.controlPoints";
 const savedOpHistory = "vintlander.opHistory";
 const savedMapCenter = "vintlander.mapCenter";
+const savedArtillery = "vintlander.artillery";
 const savedController = "vintlander.controller";
 const savedCompletedTasks = "vintlander.completedTasks";
 const defaultMapPosition = { lat: 51.38466954999258, lng: -2.3747654912984433 };
@@ -497,6 +500,7 @@ export default function TacpTraining({
   const [controlPoints, setControlPoints] = useState(() =>
     loadSavedList(savedControlPoints)
   );
+  const [artillery, setArtillery] = useState(() => loadSavedList(savedArtillery));
   const [opHistory, setOpHistory] = useState(() =>
     loadSavedList(savedOpHistory)
   );
@@ -546,6 +550,9 @@ export default function TacpTraining({
   const [controlPointName, setControlPointName] = useState("");
   const [targetType, setTargetType] = useState("enemy");
   const [targetDescription, setTargetDescription] = useState("");
+  const [artilleryName, setArtilleryName] = useState("");
+  const [artilleryGunGrid, setArtilleryGunGrid] = useState("");
+  const [artilleryTargetGrid, setArtilleryTargetGrid] = useState("");
   const [intelText, setIntelText] = useState("");
   const [targetInjectType, setTargetInjectType] = useState("vague");
   const [selectedAttackBriefId, setSelectedAttackBriefId] = useState("");
@@ -612,6 +619,7 @@ export default function TacpTraining({
       setAttackStatus(loadSavedValue(savedAttackStatus, defaultAttackStatus));
       setPendingCheckIn(loadSavedValue(savedPendingCheckIn));
       setControlPoints(loadSavedList(savedControlPoints));
+      setArtillery(loadSavedList(savedArtillery));
       setOpHistory(loadSavedList(savedOpHistory));
       setCallsigns(() => {
         const saved = loadSavedList(savedCallsigns);
@@ -704,6 +712,10 @@ export default function TacpTraining({
   useEffect(() => {
     window.localStorage.setItem(savedControlPoints, JSON.stringify(controlPoints));
   }, [controlPoints]);
+
+  useEffect(() => {
+    window.localStorage.setItem(savedArtillery, JSON.stringify(artillery));
+  }, [artillery]);
 
   useEffect(() => {
     window.localStorage.setItem(savedOpHistory, JSON.stringify(opHistory));
@@ -1159,8 +1171,8 @@ export default function TacpTraining({
   }
 
   function pushSituationUpdate() {
-    setController((current) => ({
-      ...current,
+    const updatedController = {
+      ...controller,
       friendlies: situationTemplate.friendlyPosture,
       situationUpdate: [
         situationTemplate.friendlyPosture,
@@ -1168,7 +1180,14 @@ export default function TacpTraining({
         situationTemplate.civilianPattern,
         situationTemplate.controlMeasure,
       ].join(" "),
-    }));
+    };
+    setController(updatedController);
+    window.localStorage.setItem(savedController, JSON.stringify(updatedController));
+    const stagedTasking = buildDsAircraftTasking();
+    window.localStorage.setItem(savedStagedCheckIn, JSON.stringify(stagedTasking));
+    window.localStorage.removeItem(savedPendingCheckIn);
+    setPendingCheckIn(null);
+    onNavigate("map");
   }
 
   function pushThreatsAndRestrictions() {
@@ -1179,13 +1198,13 @@ export default function TacpTraining({
     }));
   }
 
-  function pushAircraftForCheckIn() {
+  function buildDsAircraftTasking() {
     const aircraftId = selectedAircraft.replace("type:", "");
     const manualScenario =
       checkInDeliveryMode === "dsVoice"
         ? dsVoicePreview
         : null;
-    const tasking = {
+    return {
       id: `CHECKIN-${Date.now()}`,
       aircraftId,
       aircraftLabel: selectedAircraftLabel,
@@ -1202,8 +1221,10 @@ export default function TacpTraining({
       extraPlaytimeMinutes: 0,
       routedAt: null,
     };
+  }
 
-    setPendingCheckIn(tasking);
+  function pushAircraftForCheckIn() {
+    setPendingCheckIn(buildDsAircraftTasking());
   }
 
   function startSelfLedGeneratedSerial() {
@@ -1281,10 +1302,11 @@ export default function TacpTraining({
         detail: `${selfLedTarget.description} / ${selfLedTarget.mgrs}`,
         data: { target: selfLedTarget },
       });
-      window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(tasking));
-      setPendingCheckIn(tasking);
+      window.localStorage.setItem(savedStagedCheckIn, JSON.stringify(tasking));
+      window.localStorage.removeItem(savedPendingCheckIn);
+      setPendingCheckIn(null);
       setSelfSetupComplete(true);
-      onNavigate("checkin");
+      onNavigate("map");
     } catch {
       alert("Check the OP and IP/BP MGRS grids before starting the serial.");
     }
@@ -1409,6 +1431,40 @@ export default function TacpTraining({
     } catch {
       alert("Invalid target MGRS grid.");
     }
+  }
+
+  function pushGunTargetLine() {
+    try {
+      const gunPosition = parseMgrs(artilleryGunGrid);
+      const targetPosition = parseMgrs(artilleryTargetGrid);
+      const item = {
+        id: `GTL-${Date.now()}`,
+        name: artilleryName.trim().toUpperCase() || `GUNS ${artillery.length + 1}`,
+        gunPosition,
+        gunMgrs: mgrs.forward([gunPosition.lng, gunPosition.lat]),
+        targetPosition,
+        targetMgrs: mgrs.forward([targetPosition.lng, targetPosition.lat]),
+        createdAt: getTimestamp(),
+        source: "DS GTL",
+      };
+      setArtillery((current) => [...current, item]);
+      setArtilleryName("");
+      setArtilleryGunGrid("");
+      setArtilleryTargetGrid("");
+      recordMissionEvent({
+        type: "artillery",
+        title: `${item.name} gun-target line active`,
+        detail: `${formatMgrs(gunPosition)} to ${formatMgrs(targetPosition)}. Deconflict aircraft from the gun-target line.`,
+        severity: "warning",
+        data: { artillery: item },
+      });
+    } catch {
+      alert("Check both the artillery and target MGRS grids.");
+    }
+  }
+
+  function deleteArtillery(itemId) {
+    setArtillery((current) => current.filter((item) => item.id !== itemId));
   }
 
   function updateTargetStatus(phase) {
@@ -1901,8 +1957,8 @@ export default function TacpTraining({
           <div>
             <h1>Self-Led Serial Setup</h1>
             <p>
-              Build the ground picture and control points first, then launch
-              straight into an auto-generated check-in.
+              Build the initial ground picture, review and adjust it on the map,
+              then confirm map readiness before aircraft check-in.
             </p>
           </div>
           <div className="headerActions">
@@ -2149,7 +2205,7 @@ export default function TacpTraining({
 
           <div className="briefActions">
             <button onClick={startSelfLedGeneratedSerial}>
-              Auto Push Aircraft And Start Check-In
+              Continue To Map Review
             </button>
           </div>
         </section>
@@ -3148,7 +3204,9 @@ export default function TacpTraining({
                 </p>
               </div>
 
-              <button onClick={pushSituationUpdate}>Push Situation Update</button>
+              <button onClick={pushSituationUpdate}>
+                Push Situation Update & Review Map
+              </button>
             </div>
 
             <div className="card serialControl">
@@ -3355,6 +3413,48 @@ export default function TacpTraining({
                 )}
               </div>
             </div>
+
+            <div className="card serialControl">
+              <h2>Artillery Gun-Target Line</h2>
+              <p>Push a live gun-target line to both maps for airspace deconfliction.</p>
+              <label className="field">
+                Artillery unit / callsign
+                <input
+                  value={artilleryName}
+                  onChange={(event) => setArtilleryName(event.target.value.toUpperCase())}
+                  placeholder="Example: GUNS 1"
+                />
+              </label>
+              <div className="grid compactGrid">
+                <label className="field">
+                  Gun position MGRS
+                  <input
+                    value={artilleryGunGrid}
+                    onChange={(event) => setArtilleryGunGrid(event.target.value.toUpperCase())}
+                    placeholder="Gun grid"
+                  />
+                </label>
+                <label className="field">
+                  Target MGRS
+                  <input
+                    value={artilleryTargetGrid}
+                    onChange={(event) => setArtilleryTargetGrid(event.target.value.toUpperCase())}
+                    placeholder="Artillery target grid"
+                  />
+                </label>
+              </div>
+              <button onClick={pushGunTargetLine}>Push Gun-Target Line</button>
+              {artillery.map((item) => (
+                <div key={item.id} className="dataRow">
+                  <span>{item.name}</span>
+                  <strong>{item.targetPosition ? "GTL ACTIVE" : "GUN GRID"}</strong>
+                  <small>{formatMgrs(item.gunPosition)}</small>
+                  <button className="removeControlPoint" onClick={() => deleteArtillery(item.id)}>
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
           </section>
 
           <section className="trainingGrid">
@@ -3454,6 +3554,7 @@ export default function TacpTraining({
                 >
                   <TargetMarkers targets={targets} />
                   <ControlPointMarkers controlPoints={controlPoints} />
+                  <ArtilleryOverlay artillery={artillery} />
                   <ObserverMarker observerPosition={observerPosition} />
                 </Map>
               </div>

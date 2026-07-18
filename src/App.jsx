@@ -23,16 +23,19 @@ const missionStorageKeys = [
   "vintlander.standalone.observerPosition",
   "vintlander.standalone.controlPoints",
   "vintlander.standalone.mapCenter",
+  "vintlander.standalone.artillery",
   "vintlander.intelInjects",
   "vintlander.targetDevelopmentStatus",
   "vintlander.attackBriefs",
   "vintlander.trainingLogs",
   "vintlander.pendingCheckIn",
+  "vintlander.stagedCheckIn",
   "vintlander.attackStatus",
   "vintlander.missionEvents",
   "vintlander.controlPoints",
   "vintlander.controller",
   "vintlander.completedTasks",
+  "vintlander.artillery",
 ];
 const serialStorageKeys = [
   "vintlander.targets",
@@ -42,11 +45,13 @@ const serialStorageKeys = [
   "vintlander.attackBriefs",
   "vintlander.trainingLogs",
   "vintlander.pendingCheckIn",
+  "vintlander.stagedCheckIn",
   "vintlander.attackStatus",
   "vintlander.missionEvents",
   "vintlander.controlPoints",
   "vintlander.controller",
   "vintlander.completedTasks",
+  "vintlander.artillery",
 ];
 const linkedStorageKeys = [
   ...new Set([
