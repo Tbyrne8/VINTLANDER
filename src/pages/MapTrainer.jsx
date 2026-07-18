@@ -44,6 +44,7 @@ const heightBlockOptions = Array.from({ length: 30 }, (_, index) => {
   const feet = (index + 1) * 1000;
   return `${feet} FT`;
 });
+const racetrackAnimationScale = 0.3;
 
 function SerialWorkflowNav({ onNavigate }) {
   return (
@@ -1522,7 +1523,11 @@ function getPathPhase(tick, eastAxis, northAxis, platformProfile) {
   const speedMps = platformProfile.speedMps || 50;
   const pathLength = getPathLengthMetres(eastAxis, northAxis, platformProfile);
 
-  return ((tick * speedMps) / Math.max(pathLength, 1)) * Math.PI * 2;
+  return (
+    ((tick * speedMps * racetrackAnimationScale) / Math.max(pathLength, 1)) *
+    Math.PI *
+    2
+  );
 }
 
 function getPathLengthMetres(eastAxis, northAxis, platformProfile) {

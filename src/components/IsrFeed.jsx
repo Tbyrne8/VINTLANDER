@@ -4,6 +4,7 @@ import * as mgrs from "mgrs";
 import { getAttackRunGeometry } from "../utils/attackRun.js";
 
 const sensorZoomLevels = [1, 4, 12, 32];
+const racetrackAnimationScale = 0.3;
 
 export default function IsrFeed({
   position,
@@ -78,13 +79,11 @@ export default function IsrFeed({
   const trackAgeSeconds =
     activeTarget && trackLockedAt ? Math.floor((Date.now() - trackLockedAt) / 1000) : 0;
   const trackQuality = activeTarget ? getTrackQuality(zoomLevel, trackAgeSeconds) : null;
-  const feedHeading = useMemo(
-    () =>
-      activeTarget
-        ? getBearingDegrees(aircraftPosition, activeTarget.position)
-        : getMovementHeading(orbitAnchor, feedTick, altitudeProfile, platformProfile),
-    [activeTarget, aircraftPosition, altitudeProfile, feedTick, orbitAnchor, platformProfile]
-  );
+  const aircraftHeading =
+    attackGeometry?.routeFrom && attackGeometry?.routeTo
+      ? getBearingDegrees(attackGeometry.routeFrom, attackGeometry.routeTo)
+      : getMovementHeading(orbitAnchor, feedTick, altitudeProfile, platformProfile);
+  const feedHeading = aircraftHeading;
   const activeTargetPosition = activeTarget
     ? getFeedPosition(
         feedCenter,
@@ -127,9 +126,11 @@ export default function IsrFeed({
   }, [
     feedTick,
     feedMode,
+    aircraftPosition,
     onSensorPositionChange,
     orbitAnchor,
     platformAltitude,
+    unlockedPlatform,
     unlockedPlatform?.aircraft,
     unlockedPlatform?.callsign,
     unlockedPlatform?.id,
@@ -718,7 +719,11 @@ function getPathPhase(tick, eastAxis, northAxis, platformProfile) {
   const speedMps = platformProfile.speedMps || 50;
   const pathLength = getPathLengthMetres(eastAxis, northAxis, platformProfile);
 
-  return ((tick * speedMps) / Math.max(pathLength, 1)) * Math.PI * 2;
+  return (
+    ((tick * speedMps * racetrackAnimationScale) / Math.max(pathLength, 1)) *
+    Math.PI *
+    2
+  );
 }
 
 function getPathLengthMetres(eastAxis, northAxis, platformProfile) {

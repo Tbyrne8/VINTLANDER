@@ -64,6 +64,13 @@ function normaliseMissionNumber(value) {
     .replace(/[^A-Z0-9]/g, "");
 }
 
+function normaliseAircraftType(value) {
+  return wordsToDigits(normalise(value))
+    .replace(/^\s*\d\s*(?:X\s*)?/, "")
+    .replace(/[^A-Z0-9]/g, "")
+    .replace(/(\d)S$/, "$1");
+}
+
 function tokens(value) {
   return normalise(value).split(/[ ,./()-]+/).filter(Boolean);
 }
@@ -161,12 +168,13 @@ export function markCheckInField(field, userValue, correctValue) {
 if (field === "aircraftNumberType") {
   const correctNumber = numbersOnly(correct);
   const numberedUser = wordsToDigits(user);
-
-  const typeWords = tokens(correct).filter(
-    (word) => !["1", "2", "X"].includes(word)
-  );
-
-  const typeMatches = typeWords.every((word) => numberedUser.includes(word));
+  const correctType = normaliseAircraftType(correct);
+  const userType = normaliseAircraftType(user);
+  const typeMatches =
+    userType === correctType ||
+    (correctType.startsWith(userType) &&
+      correctType.length === userType.length + 1 &&
+      /[A-Z]/.test(correctType.at(-1)));
 
   // If it is only 1 aircraft, accepting just the aircraft type is okay
   if (correctNumber.startsWith("1") && typeMatches) {
