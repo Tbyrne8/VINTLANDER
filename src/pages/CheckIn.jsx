@@ -177,7 +177,7 @@ function formatRadioVoiceText(lines) {
         .replace(/\bF-16C\b/g, "eff sixteen charlie")
         .replace(/\bF-15E\b/g, "eff fifteen echo")
         .replace(/\bF\/A-18E\b/g, "eff ay eighteen echo")
-        .replace(/\bA-10C\b/g, "ay ten charlie")
+        .replace(/\bA-10C\b/g, "ayy ten charlie")
         .replace(/\bAC-130J\b/g, "ay see one thirty juliett")
         .replace(/\d+/g, (digits) =>
           [...digits].map((digit) => digitWords[Number(digit)]).join(" ")

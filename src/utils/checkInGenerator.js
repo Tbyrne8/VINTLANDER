@@ -328,6 +328,13 @@ function formatMissionNumberForVoice(missionNumber) {
   );
 }
 
+function formatCallsignForVoice(callsign = "") {
+  return callsign
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+    .replace(/\d/g, (digit) => digitsToWords(digit).toLowerCase());
+}
+
 export function getAircraftOptions() {
   return Object.entries(aircraftLibrary).map(([id, aircraft]) => ({
     id,
@@ -363,6 +370,7 @@ export function generateCheckIn(selectedAircraftId = "random", options = {}) {
   const downlinkCode = options.downlinkCode || randomDownlink();
   const abortCode = options.abortCode || pick(abortCodes);
   const missionNumberVoice = formatMissionNumberForVoice(missionNumber);
+  const callsignVoice = formatCallsignForVoice(callsign);
 
   const correctCheckIn = {
     aircraftCallsign: callsign,
@@ -388,7 +396,7 @@ export function generateCheckIn(selectedAircraftId = "random", options = {}) {
       ],
       voiceLines: [
         `${controllerCallsign}.`,
-        `THIS IS ${callsign}.`,
+        `THIS IS ${callsignVoice}.`,
         `${missionNumberVoice}.`,
         `${aircraft.numberAndType}.`,
       ],

@@ -21,6 +21,12 @@ function radioText(value = "") {
     );
 }
 
+function callsignName(value = "") {
+  return String(value)
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+}
+
 function getLine(lines, number) {
   return lines?.find(([lineNumber]) => String(lineNumber) === String(number))?.[2] || "unknown";
 }
@@ -148,7 +154,10 @@ export default function MissionRadioPanel({
   }
 
   async function playOne({ text, speaker = "aircraft" }) {
-    const formattedText = radioText(text);
+    const namedCallsigns = String(text)
+      .replaceAll(platform.callsign, callsignName(platform.callsign))
+      .replaceAll(controllerCallsign, callsignName(controllerCallsign));
+    const formattedText = radioText(namedCallsigns);
     const profile = speaker === "controller" ? "calmController" : "fastJet";
     const voiceKey = speaker === "controller" ? controllerCallsign : platform.callsign;
 
