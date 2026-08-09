@@ -19,6 +19,7 @@ import {
   loadMissionEvents,
   recordMissionEvent,
 } from "../utils/missionEvents.js";
+import { getScenarioPreset, scenarioPresets } from "../utils/scenarioPresets.js";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -538,6 +539,9 @@ export default function TacpTraining({
     checkInDeliveryMode: "generatedRadio",
   });
   const [selfSetupControlPoints, setSelfSetupControlPoints] = useState([]);
+  const [selectedScenarioId, setSelectedScenarioId] = useState(
+    scenarioPresets[0].id
+  );
   const [callsigns, setCallsigns] = useState(() => {
     const saved = loadSavedList(savedCallsigns);
     return saved.length ? saved : getDefaultCallsigns();
@@ -1153,6 +1157,22 @@ export default function TacpTraining({
     );
   }
 
+  function buildScenarioControlPoints(scenario, source) {
+    return scenario.controlPoints.map((point, index) => {
+      const position = parseMgrs(point.grid);
+
+      return {
+        id: `${point.type.toUpperCase()}-${scenario.id}-${index}`,
+        type: point.type,
+        name: point.name,
+        position,
+        mgrs: mgrs.forward([position.lng, position.lat]),
+        createdAt: getTimestamp(),
+        source,
+      };
+    });
+  }
+
   function rememberOp(name, position) {
     const opName = name.trim() || `OP ${opHistory.length + 1}`;
     const opGrid = formatMgrs(position);
@@ -1175,7 +1195,11 @@ export default function TacpTraining({
     });
   }
 
-  function pushSituationUpdate() {
+  function pushSituationUpdate(scenario = null) {
+    const scenarioPosition = scenario ? parseMgrs(scenario.opGrid) : null;
+    const scenarioControlPoints = scenario
+      ? buildScenarioControlPoints(scenario, "DS scenario preset")
+      : null;
     const updatedController = {
       ...controller,
       friendlies: situationTemplate.friendlyPosture,
@@ -1185,7 +1209,18 @@ export default function TacpTraining({
         situationTemplate.civilianPattern,
         situationTemplate.controlMeasure,
       ].join(" "),
+      ...(scenarioPosition
+        ? { opTasking: `${scenario.name} loaded. ${scenario.opName} at ${formatMgrs(scenarioPosition)} with ${scenarioControlPoints.length} IP/BP markers.` }
+        : {}),
     };
+    if (scenarioPosition) {
+      setObserverPosition(scenarioPosition);
+      setControlPoints(scenarioControlPoints);
+      window.localStorage.setItem(savedObserverPosition, JSON.stringify(scenarioPosition));
+      window.localStorage.setItem(savedMapCenter, JSON.stringify(scenarioPosition));
+      window.localStorage.setItem(savedControlPoints, JSON.stringify(scenarioControlPoints));
+      rememberOp(scenario.opName, scenarioPosition);
+    }
     setController(updatedController);
     window.localStorage.setItem(savedController, JSON.stringify(updatedController));
     const stagedTasking = buildDsAircraftTasking();
@@ -1232,13 +1267,14 @@ export default function TacpTraining({
     setPendingCheckIn(buildDsAircraftTasking());
   }
 
-  function startSelfLedGeneratedSerial() {
+  function startSelfLedGeneratedSerial(scenario = null) {
     try {
-      const opPosition = parseMgrs(selfSetup.opGrid);
+      const opPosition = parseMgrs(scenario?.opGrid || selfSetup.opGrid);
       const selfLedTarget = createSelfLedTarget(opPosition, targets);
       const updatedTargets = [...targets, selfLedTarget];
-      const setupControlPoints =
-        selfSetupControlPoints.length > 0
+      const setupControlPoints = scenario
+        ? buildScenarioControlPoints(scenario, "Self-led scenario preset")
+        : selfSetupControlPoints.length > 0
           ? selfSetupControlPoints
           : [buildSelfControlPoint()];
       const availableAircraft = getAircraftOptions();
@@ -1279,7 +1315,7 @@ export default function TacpTraining({
       window.localStorage.setItem(savedObserverPosition, JSON.stringify(opPosition));
       window.localStorage.setItem(savedMapCenter, JSON.stringify(opPosition));
       window.localStorage.setItem(savedTargets, JSON.stringify(updatedTargets));
-      rememberOp(selfSetup.opName, opPosition);
+      rememberOp(scenario?.opName || selfSetup.opName, opPosition);
       setControlPoints(setupControlPoints);
       window.localStorage.setItem(
         savedControlPoints,
@@ -1293,7 +1329,9 @@ export default function TacpTraining({
         threats: selfSetup.threats,
         restrictions: selfSetup.restrictions,
         targetDevelopment: selfSetup.targetDevelopment,
-        opTasking: `OP set during self-led setup: ${formatMgrs(opPosition)}.`,
+        opTasking: scenario
+          ? `${scenario.name} loaded. ${scenario.opName} at ${formatMgrs(opPosition)} with ${setupControlPoints.length} IP/BP markers.`
+          : `OP set during self-led setup: ${formatMgrs(opPosition)}.`,
       };
       const updatedTargetStatus = {
         phase: "Target plotted",
@@ -1979,6 +2017,43 @@ export default function TacpTraining({
         <section className="card selfSetupCard">
           <h2>Serial Details</h2>
 
+          <div className="serialCard scenarioPresetCard">
+            <small>Quick-start location</small>
+            <label className="field">
+              Premade OP / IP / BP scenario
+              <select
+                value={selectedScenarioId}
+                onChange={(event) => setSelectedScenarioId(event.target.value)}
+              >
+                {scenarioPresets.map((scenario) => (
+                  <option key={scenario.id} value={scenario.id}>
+                    {scenario.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {getScenarioPreset(selectedScenarioId) && (
+              <>
+                <p>{getScenarioPreset(selectedScenarioId).description}</p>
+                <p>
+                  {getScenarioPreset(selectedScenarioId).opName} / {getScenarioPreset(selectedScenarioId).opGrid}
+                  {" / "}{getScenarioPreset(selectedScenarioId).controlPoints.length} IP/BP markers
+                </p>
+              </>
+            )}
+            <button
+              onClick={() =>
+                startSelfLedGeneratedSerial(getScenarioPreset(selectedScenarioId))
+              }
+            >
+              Use Scenario & Continue To Map
+            </button>
+          </div>
+
+          <p className="emptyText">
+            Or build the serial manually below.
+          </p>
+
           <div className="grid compactGrid">
             <label className="field">
               Callsign
@@ -2213,7 +2288,7 @@ export default function TacpTraining({
           </label>
 
           <div className="briefActions">
-            <button onClick={startSelfLedGeneratedSerial}>
+            <button onClick={() => startSelfLedGeneratedSerial()}>
               Continue To Map Review
             </button>
           </div>
@@ -3147,6 +3222,39 @@ export default function TacpTraining({
             <div className="card serialControl">
               <h2>Situation Builder</h2>
 
+              <div className="serialCard scenarioPresetCard">
+                <small>Quick-start location</small>
+                <label className="field">
+                  Premade OP / IP / BP scenario
+                  <select
+                    value={selectedScenarioId}
+                    onChange={(event) => setSelectedScenarioId(event.target.value)}
+                  >
+                    {scenarioPresets.map((scenario) => (
+                      <option key={scenario.id} value={scenario.id}>
+                        {scenario.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {getScenarioPreset(selectedScenarioId) && (
+                  <>
+                    <p>{getScenarioPreset(selectedScenarioId).description}</p>
+                    <p>
+                      {getScenarioPreset(selectedScenarioId).opName} / {getScenarioPreset(selectedScenarioId).opGrid}
+                      {" / "}{getScenarioPreset(selectedScenarioId).controlPoints.length} IP/BP markers
+                    </p>
+                  </>
+                )}
+                <button
+                  onClick={() =>
+                    pushSituationUpdate(getScenarioPreset(selectedScenarioId))
+                  }
+                >
+                  Load Scenario & Review Map
+                </button>
+              </div>
+
               <label className="field">
                 Friendly posture
                 <select
@@ -3213,7 +3321,7 @@ export default function TacpTraining({
                 </p>
               </div>
 
-              <button onClick={pushSituationUpdate}>
+              <button onClick={() => pushSituationUpdate()}>
                 Push Situation Update & Review Map
               </button>
             </div>

@@ -2231,3 +2231,179 @@ select {
     display: none;
   }
 }
+
+@media (max-width: 700px) {
+  html,
+  body,
+  #root,
+  .app {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .nav {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 8px;
+  }
+
+  .nav button,
+  .serialBar button,
+  .headerActions button {
+    min-height: 44px;
+  }
+
+  .page,
+  .serialMode .trainingPage {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .pageHeader,
+  .serialBar,
+  .serialBar div,
+  .headerActions,
+  .linkedSessionBar {
+    align-items: stretch;
+  }
+
+  .serialBar div,
+  .headerActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .trainingTabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .trainingTabs button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 8px 4px;
+    overflow-wrap: anywhere;
+  }
+
+  .briefGrid,
+  .trainingGrid,
+  .grid,
+  .linkedSerialLauncher,
+  .linkedSerialActions,
+  .compactGrid,
+  .readinessStrip,
+  .phaseGrid,
+  .dsControlGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .missionLauncher,
+  .targetStatusGrid,
+  .attackStatusGrid,
+  .briefActions,
+  .dsInjectGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pageBackRow .missionLauncher {
+    width: 100%;
+  }
+
+  .card,
+  .serialControl,
+  .serialSnapshot,
+  .briefBuilder,
+  .briefPreview,
+  .phaseCard {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .callsignAddRow,
+  .savedBrief,
+  .targetItem {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .serialMode .mapPage,
+  .mapPage {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .serialMode .mapControls,
+  .mapControls {
+    width: 100%;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 2px solid #f5c542;
+  }
+
+  .serialMode .mapBox,
+  .mapBox {
+    order: -1;
+    width: 100%;
+    height: 56vh;
+    min-height: 390px;
+  }
+
+  .mapMonitorCard {
+    min-height: 0;
+  }
+
+  .dsMapMonitor,
+  .attackRunMap {
+    height: 280px;
+  }
+
+  .vdlWindow {
+    width: calc(100vw - 20px);
+    max-width: 100%;
+  }
+
+  .vdlControls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .resultRow,
+  .missionRadioHeader {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    max-width: 100%;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 900px) {
+  .phaseGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .targetStatusGrid,
+  .attackStatusGrid,
+  .briefActions,
+  .dsInjectGrid,
+  .serialBar div,
+  .headerActions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card {
+    padding: 12px;
+  }
+}

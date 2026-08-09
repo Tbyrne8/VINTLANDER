@@ -160,3 +160,14 @@ body {
   display: grid;
   gap: 5px;
 }
+
+@media (max-width: 700px) {
+  .deconflictionRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .radioVoiceControls,
+  .stageRetryGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
