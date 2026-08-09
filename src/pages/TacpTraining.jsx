@@ -1109,6 +1109,15 @@ export default function TacpTraining({
   }
 
   function selectSavedOp(opId) {
+    if (opId.startsWith("preset:")) {
+      const scenario = getScenarioPreset(opId.replace("preset:", ""));
+
+      if (scenario) {
+        loadSelfScenarioPreset(scenario);
+      }
+      return;
+    }
+
     const selectedOp = opHistory.find((op) => op.id === opId);
 
     setSelfSetup((current) => ({
@@ -1117,6 +1126,21 @@ export default function TacpTraining({
       opName: selectedOp?.name || current.opName,
       opGrid: selectedOp?.mgrs || current.opGrid,
     }));
+  }
+
+  function loadSelfScenarioPreset(scenario) {
+    setSelectedScenarioId(scenario.id);
+    setSelfSetup((current) => ({
+      ...current,
+      savedOpId: `preset:${scenario.id}`,
+      opName: scenario.opName,
+      opGrid: scenario.opGrid,
+      controlPointGrid: "",
+      controlPointName: "",
+    }));
+    setSelfSetupControlPoints(
+      buildScenarioControlPoints(scenario, "Self-led scenario preset")
+    );
   }
 
   function buildSelfControlPoint() {
@@ -2162,11 +2186,22 @@ export default function TacpTraining({
                 onChange={(event) => selectSavedOp(event.target.value)}
               >
                 <option value="">Manual OP grid</option>
-                {opHistory.map((op) => (
-                  <option key={op.id} value={op.id}>
-                    {op.name} / {op.mgrs}
-                  </option>
-                ))}
+                <optgroup label="Premade scenarios">
+                  {scenarioPresets.map((scenario) => (
+                    <option key={scenario.id} value={`preset:${scenario.id}`}>
+                      {scenario.name} / {scenario.opGrid}
+                    </option>
+                  ))}
+                </optgroup>
+                {opHistory.length > 0 && (
+                  <optgroup label="Previously saved OPs">
+                    {opHistory.map((op) => (
+                      <option key={op.id} value={op.id}>
+                        {op.name} / {op.mgrs}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </label>
 
