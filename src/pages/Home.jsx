@@ -24,8 +24,8 @@ export default function Home({
         <div>
           <h2>Self-Led Full Serial</h2>
           <p>
-            Set the situation, OP and IP/BP grids first, then launch straight
-            into an auto-generated aircraft check-in without a live DS.
+            Set the situation, review and plot the mission map, then receive an
+            auto-generated aircraft check-in without a live DS.
           </p>
         </div>
         <button onClick={onStartSelfLedSerial}>Start Self-Led Serial</button>

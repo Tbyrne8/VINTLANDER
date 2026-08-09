@@ -59,7 +59,7 @@ function lettersToInitials(value) {
 }
 
 function normaliseMissionNumber(value) {
-  return lettersToInitials(value)
+  return lettersToInitials(wordsToDigits(value))
     .replace(/^MISSION/, "")
     .replace(/[^A-Z0-9]/g, "");
 }

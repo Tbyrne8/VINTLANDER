@@ -813,6 +813,11 @@ export default function TacpTraining({
   const linkedAttackBrief = attackBriefs.find(
     (brief) => brief.id === attackStatus.linkedBriefId
   );
+  useEffect(() => {
+    if (linkedAttackBrief?.readbackConfirmed && attackReadbackState === "Pending") {
+      setAttackReadbackState("Correct");
+    }
+  }, [attackReadbackState, linkedAttackBrief]);
   const selectedAttackPlatform = platforms.find(
     (platform) => platform.id === selectedAttackPlatformId
   );
@@ -1280,22 +1285,26 @@ export default function TacpTraining({
         savedControlPoints,
         JSON.stringify(setupControlPoints)
       );
-      setController((current) => ({
-        ...current,
-        callsign: selfSetup.callsign.trim().toUpperCase() || current.callsign,
+      const updatedController = {
+        ...controller,
+        callsign: selfSetup.callsign.trim().toUpperCase() || controller.callsign,
         situationUpdate: selfSetup.situationUpdate,
         friendlies: selfSetup.friendlies,
         threats: selfSetup.threats,
         restrictions: selfSetup.restrictions,
         targetDevelopment: selfSetup.targetDevelopment,
         opTasking: `OP set during self-led setup: ${formatMgrs(opPosition)}.`,
-      }));
-      setTargetStatus({
+      };
+      const updatedTargetStatus = {
         phase: "Target plotted",
         notes: `Self-led setup complete. OP ${formatMgrs(opPosition)}, ${setupControlPoints.length} IP/BP and ${selfLedTarget.id} ready.`,
         completed: ["OP plotted", "Target plotted"],
         intelAlert: false,
-      });
+      };
+      setController(updatedController);
+      setTargetStatus(updatedTargetStatus);
+      window.localStorage.setItem(savedController, JSON.stringify(updatedController));
+      window.localStorage.setItem(savedTargetStatus, JSON.stringify(updatedTargetStatus));
       recordMissionEvent({
         type: "target",
         title: `${selfLedTarget.id} generated near the OP`,

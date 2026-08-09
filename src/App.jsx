@@ -256,12 +256,15 @@ export default function App() {
 
   function clearTrainingData() {
     const confirmed = window.confirm(
-      "Clear all standalone training data, including aircraft, OP, targets, intel, attack briefs and logs?"
+      "Clear all training data, including serial and standalone aircraft, OPs, targets, intel, attack briefs and logs?"
     );
 
     if (!confirmed) return;
 
     missionStorageKeys.forEach((key) => window.localStorage.removeItem(key));
+    serialStorageKeys.forEach((key) => window.localStorage.removeItem(key));
+    window.localStorage.removeItem(savedPlatforms);
+    setPlatforms([]);
     setStandalonePlatforms([]);
   }
 
