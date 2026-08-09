@@ -6,10 +6,10 @@ export const scenarioPresets = [
     opName: "OP COPEHILL",
     opGrid: "30U WB 71301 73353",
     controlPoints: [
-      { type: "ip", name: "WEST", grid: "30U WB 68796 74195" },
-      { type: "ip", name: "EAST", grid: "30U WB 73680 74596" },
-      { type: "bp", name: "BADGER", grid: "30U WB 70228 71656" },
-      { type: "bp", name: "LYNX", grid: "30U WB 72532 71799" },
+      { type: "ip", name: "WEST", grid: "30U WB 61298 73221" },
+      { type: "ip", name: "EAST", grid: "30U WB 81305 73499" },
+      { type: "bp", name: "BADGER", grid: "30U WB 68352 69773" },
+      { type: "bp", name: "LYNX", grid: "30U WB 74349 69856" },
     ],
   },
   {

@@ -20,6 +20,7 @@ import {
   recordMissionEvent,
 } from "../utils/missionEvents.js";
 import { getScenarioPreset, scenarioPresets } from "../utils/scenarioPresets.js";
+import { findSafeTargetPosition } from "../utils/targetPlacement.js";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -439,14 +440,12 @@ function offsetPosition(center, eastMetres, northMetres) {
   };
 }
 
-function createSelfLedTarget(opPosition, existingTargets) {
-  const bearing = Math.random() * Math.PI * 2;
-  const distanceMetres = 1500 + Math.random() * 2000;
-  const position = offsetPosition(
-    opPosition,
-    Math.sin(bearing) * distanceMetres,
-    Math.cos(bearing) * distanceMetres
-  );
+function createSelfLedTarget(opPosition, existingTargets, controlPoints = []) {
+  const exclusionPositions = [
+    ...existingTargets.map((target) => target.position).filter(Boolean),
+    ...controlPoints.map((point) => point.position).filter(Boolean),
+  ];
+  const position = findSafeTargetPosition(opPosition, exclusionPositions);
   const nextNumber =
     existingTargets.reduce((highest, target) => {
       const number = Number(String(target.id || "").match(/^TGT-(\d+)$/)?.[1]);
@@ -1294,13 +1293,17 @@ export default function TacpTraining({
   function startSelfLedGeneratedSerial(scenario = null) {
     try {
       const opPosition = parseMgrs(scenario?.opGrid || selfSetup.opGrid);
-      const selfLedTarget = createSelfLedTarget(opPosition, targets);
-      const updatedTargets = [...targets, selfLedTarget];
       const setupControlPoints = scenario
         ? buildScenarioControlPoints(scenario, "Self-led scenario preset")
         : selfSetupControlPoints.length > 0
           ? selfSetupControlPoints
           : [buildSelfControlPoint()];
+      const selfLedTarget = createSelfLedTarget(
+        opPosition,
+        targets,
+        setupControlPoints
+      );
+      const updatedTargets = [...targets, selfLedTarget];
       const availableAircraft = getAircraftOptions();
       const resolvedAircraft =
         selectedAircraft === "random"
