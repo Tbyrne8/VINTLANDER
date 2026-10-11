@@ -23,6 +23,7 @@ import AttackRunMarkers from "../components/AttackRunMarkers.jsx";
 import ArtilleryOverlay from "../components/ArtilleryOverlay.jsx";
 import { recordMissionEvent } from "../utils/missionEvents.js";
 import { getNextControlPointName } from "../utils/controlPointNames.js";
+import { getScaledRouteDurationMs } from "../utils/routeTiming.js";
 
 const savedTargets = "vintlander.targets";
 const savedObserverPosition = "vintlander.observerPosition";
@@ -760,20 +761,6 @@ export default function MapTrainer({
           </div>
         ) : (
           <>
-        <div className="pageBackRow compactBackRow">
-          {serialMode ? (
-            <SerialWorkflowNav onNavigate={onNavigate} />
-          ) : (
-            <button onClick={() => onNavigate("home")}>Home</button>
-          )}
-        </div>
-
-        <h1>Mission Panel</h1>
-
-        <button className="clearMission" onClick={clearMission}>
-          Clear Mission
-        </button>
-
         <div className="mapPanelTabs" role="tablist" aria-label="Map panel">
           <button
             className={panelTab === "mission" ? "activeMode" : ""}
@@ -792,6 +779,20 @@ export default function MapTrainer({
             Plotting
           </button>
         </div>
+
+        <div className="pageBackRow compactBackRow">
+          {serialMode ? (
+            <SerialWorkflowNav onNavigate={onNavigate} />
+          ) : (
+            <button onClick={() => onNavigate("home")}>Home</button>
+          )}
+        </div>
+
+        <h1>Mission Panel</h1>
+
+        <button className="clearMission" onClick={clearMission}>
+          Clear Mission
+        </button>
 
         <MapControls
           mgrsInput={mgrsInput}
@@ -1452,9 +1453,7 @@ function getRouteTransitDurationMs(pendingCheckIn) {
     pendingCheckIn.aircraftLabel || pendingCheckIn.aircraft || pendingCheckIn.aircraftId
   );
 
-  const realWorldDuration = (distanceMetres / speedMps) * 1000;
-
-  return Math.min(45000, Math.max(20000, realWorldDuration * 0.08));
+  return getScaledRouteDurationMs(distanceMetres, speedMps);
 }
 
 function getTransitSpeedMps(aircraft = "") {

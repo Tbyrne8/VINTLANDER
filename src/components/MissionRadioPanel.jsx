@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getStableRadioVoice } from "../utils/radioVoiceAssignments.js";
 
 const speechEndpoint = import.meta.env.VITE_GOOGLE_TTS_ENDPOINT || "";
 const digits = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
@@ -159,7 +160,9 @@ export default function MissionRadioPanel({
       .replaceAll(controllerCallsign, callsignName(controllerCallsign));
     const formattedText = radioText(namedCallsigns);
     const profile = speaker === "controller" ? "calmController" : "fastJet";
-    const voiceKey = speaker === "controller" ? controllerCallsign : platform.callsign;
+    const voiceKey = speaker === "controller"
+      ? `CONTROLLER::${controllerCallsign}`
+      : platform.radioVoiceKey || `${platform.id}::${platform.callsign}`;
 
     if (speechEndpoint) {
       const response = await fetch(speechEndpoint, {
@@ -189,6 +192,10 @@ export default function MissionRadioPanel({
 
     await new Promise((resolve, reject) => {
       const utterance = new SpeechSynthesisUtterance(formattedText);
+      utterance.voice = getStableRadioVoice(
+        window.speechSynthesis.getVoices(),
+        voiceKey
+      );
       utterance.rate = speaker === "controller" ? 1.02 : 1.16;
       utterance.pitch = speaker === "controller" ? 0.82 : 0.7;
       utterance.onend = resolve;

@@ -344,15 +344,20 @@ select {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin: 12px 0;
-  padding: 5px;
-  border: 1px solid #3f563f;
-  border-radius: 10px;
+  position: sticky;
+  top: -16px;
+  z-index: 20;
+  margin: -16px -16px 14px;
+  padding: 12px 16px;
+  border-bottom: 2px solid #f5c542;
   background: #101810;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
 }
 
 .mapPanelTabs button {
   margin: 0;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .mapPanelTabs button.activeMode {

@@ -17,6 +17,7 @@ import {
 
 const savedPlatforms = "vintlander.platforms";
 const savedStandalonePlatforms = "vintlander.standalone.platforms";
+const savedVoiceSessionId = "vintlander.voiceSessionId";
 const missionStorageKeys = [
   "vintlander.standalone.platforms",
   "vintlander.standalone.targets",
@@ -36,6 +37,7 @@ const missionStorageKeys = [
   "vintlander.controller",
   "vintlander.completedTasks",
   "vintlander.artillery",
+  savedVoiceSessionId,
 ];
 const serialStorageKeys = [
   "vintlander.targets",
@@ -52,6 +54,7 @@ const serialStorageKeys = [
   "vintlander.controller",
   "vintlander.completedTasks",
   "vintlander.artillery",
+  savedVoiceSessionId,
 ];
 const linkedStorageKeys = [
   ...new Set([
@@ -179,12 +182,14 @@ export default function App() {
   }
 
   function startFullSerial() {
+    window.localStorage.setItem(savedVoiceSessionId, `SERIAL-${Date.now()}`);
     setSerialVariant("ds");
     setSerialMode(true);
     setPage("tacp");
   }
 
   function startSelfLedSerial() {
+    window.localStorage.setItem(savedVoiceSessionId, `SERIAL-${Date.now()}`);
     setSerialVariant("self");
     setSerialMode(true);
     setPage("tacp");
@@ -194,6 +199,7 @@ export default function App() {
     setLinkedBusy(true);
     setLinkedError("");
     try {
+      window.localStorage.setItem(savedVoiceSessionId, `SERIAL-${Date.now()}`);
       setSerialVariant("ds");
       setSerialMode(true);
       setPage("tacp");

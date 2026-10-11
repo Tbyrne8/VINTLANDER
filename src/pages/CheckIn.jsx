@@ -6,6 +6,7 @@ import {
 import { markCheckInField } from "../utils/checkInMarking.js";
 import { formatMgrs } from "../utils/mgrs.js";
 import { recordMissionEvent } from "../utils/missionEvents.js";
+import { getStableRadioVoice } from "../utils/radioVoiceAssignments.js";
 
 const blankCheckIn = {
   aircraftCallsign: "",
@@ -25,6 +26,7 @@ const savedPendingCheckIn = "vintlander.pendingCheckIn";
 const savedControlPoints = "vintlander.controlPoints";
 const savedRadioProfile = "vintlander.radioProfile";
 const savedRadioVoice = "vintlander.radioVoice";
+const savedVoiceSessionId = "vintlander.voiceSessionId";
 const neuralRadioEndpoint = import.meta.env.VITE_GOOGLE_TTS_ENDPOINT || "";
 const deliveryOptions = [
   { id: "generatedText", label: "Generated text" },
@@ -364,6 +366,12 @@ export default function CheckIn({
   const [radioEngine, setRadioEngine] = useState("");
   const radioAudioRef = useRef(null);
   const neuralAudioRef = useRef(null);
+  const checkInVoiceRef = useRef({
+    browserVoice: null,
+    profileId: "",
+    preferredVoiceName: "",
+    voiceKey: "",
+  });
 
   const aircraftOptions = getAircraftOptions();
   const activeTransmission = scenario.transmissions[currentTransmission];
@@ -452,6 +460,7 @@ export default function CheckIn({
     const speechText = formatRadioVoiceText(
       activeTransmission.voiceLines || activeTransmission.lines
     );
+    const lockedProfileId = checkInVoiceRef.current.profileId || radioProfile;
 
     if (neuralRadioEndpoint) {
       try {
@@ -460,8 +469,8 @@ export default function CheckIn({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: speechText,
-            profile: radioProfile,
-            voiceKey:
+            profile: lockedProfileId,
+            voiceKey: checkInVoiceRef.current.voiceKey ||
               scenario.correctCheckIn.aircraftCallsign ||
               pendingCheckIn?.aircraftLabel ||
               speechText,
@@ -471,7 +480,7 @@ export default function CheckIn({
         if (!response.ok) throw new Error(`Speech request failed: ${response.status}`);
 
         const audio = new Audio(URL.createObjectURL(await response.blob()));
-        audio.playbackRate = getRadioProfile(radioProfile).playbackRate || 1;
+        audio.playbackRate = getRadioProfile(lockedProfileId).playbackRate || 1;
         neuralAudioRef.current = audio;
         setRadioLoading(false);
         setRadioPlaying(true);
@@ -512,15 +521,19 @@ export default function CheckIn({
     setRadioEngine("Browser fallback voice");
     playRadioClick(radioBed, 0.08, 0.055);
 
-    const profile = getRadioProfile(radioProfile);
+    const lockedProfileId = checkInVoiceRef.current.profileId || radioProfile;
+    const profile = getRadioProfile(lockedProfileId);
     const utterance = new SpeechSynthesisUtterance(
       speechText
     );
-    utterance.voice = getBestRadioVoice(
-      availableVoices,
-      radioProfile,
-      preferredRadioVoice
-    );
+    if (!checkInVoiceRef.current.browserVoice) {
+      checkInVoiceRef.current.browserVoice = getStableRadioVoice(
+        availableVoices,
+        checkInVoiceRef.current.voiceKey,
+        checkInVoiceRef.current.preferredVoiceName || preferredRadioVoice
+      ) || getBestRadioVoice(availableVoices, lockedProfileId, preferredRadioVoice);
+    }
+    utterance.voice = checkInVoiceRef.current.browserVoice;
     utterance.rate = profile.rate;
     utterance.pitch = profile.pitch;
     utterance.volume = profile.volume;
@@ -558,7 +571,7 @@ export default function CheckIn({
     }
 
     if (serialMode && !pendingCheckIn?.routedControlPoint) {
-      alert("Route this aircraft to an IP/BP on the map before starting check-in.");
+      alert("Route this aircraft to an IP or HA on the map before starting check-in.");
       return;
     }
 
@@ -573,6 +586,24 @@ export default function CheckIn({
             direction: pendingCheckIn?.routedControlPoint?.label,
           });
     const newScenario = applyRouteToScenario(generatedScenario, pendingCheckIn);
+    const voiceSessionId = serialMode
+      ? window.localStorage.getItem(savedVoiceSessionId) || "CURRENT-SERIAL"
+      : `STANDALONE-${pendingCheckIn?.id || Date.now()}`;
+    const aircraftVoiceKey = `${voiceSessionId}::${
+      newScenario.correctCheckIn.aircraftCallsign ||
+      pendingCheckIn?.aircraftLabel ||
+      aircraftId
+    }`;
+    checkInVoiceRef.current = {
+      browserVoice: getStableRadioVoice(
+        availableVoices,
+        aircraftVoiceKey,
+        preferredRadioVoice
+      ) || getBestRadioVoice(availableVoices, radioProfile, preferredRadioVoice),
+      profileId: radioProfile,
+      preferredVoiceName: preferredRadioVoice,
+      voiceKey: aircraftVoiceKey,
+    };
 
     setScenario(newScenario);
     setCheckIn(blankCheckIn);
@@ -707,6 +738,7 @@ export default function CheckIn({
       downlinkCode: scenario.correctCheckIn.downlinkCode,
       capabilities: scenario.correctCheckIn.capabilities,
       status: "CHECKED IN",
+      radioVoiceKey: checkInVoiceRef.current.voiceKey,
       route: pendingCheckIn?.route,
       routeStatus: pendingCheckIn?.routeStatus,
       routedControlPoint: pendingCheckIn?.routedControlPoint,
