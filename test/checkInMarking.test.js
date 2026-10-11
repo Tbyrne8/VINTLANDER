@@ -7,6 +7,12 @@ const accepts = (field, entered, expected) =>
 const rejects = (field, entered, expected) =>
   assert.equal(markCheckInField(field, entered, expected), false);
 
+test("callsign scoring ignores spaces between name and number", () => {
+  accepts("aircraftCallsign", "RAZOR21", "RAZOR 21");
+  accepts("aircraftCallsign", "RAZOR 2 1", "RAZOR 21");
+  rejects("aircraftCallsign", "RAZOR 22", "RAZOR 21");
+});
+
 test("position and altitude accepts equivalent formats", () => {
   accepts("positionAltitude", "NORTH ANGELS 12", "HOLDING NORTH, ANGELS 12");
   accepts("positionAltitude", "HOLDING EAST 14,000 FEET", "HOLDING EAST, ANGELS 14");

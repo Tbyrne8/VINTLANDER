@@ -24,6 +24,7 @@ import ArtilleryOverlay from "../components/ArtilleryOverlay.jsx";
 import { recordMissionEvent } from "../utils/missionEvents.js";
 import { getNextControlPointName } from "../utils/controlPointNames.js";
 import { getScaledRouteDurationMs } from "../utils/routeTiming.js";
+import { getInboundStartPosition } from "../utils/inboundRoute.js";
 
 const savedTargets = "vintlander.targets";
 const savedObserverPosition = "vintlander.observerPosition";
@@ -383,7 +384,7 @@ export default function MapTrainer({
           routeStartedAt: Date.now(),
           inboundStartPosition:
             platform.inboundStartPosition ||
-            getInboundStartPosition(platform.routePosition),
+            getInboundStartPosition(platform.routePosition, platform.aircraft),
         };
       })
     );
@@ -608,7 +609,10 @@ export default function MapTrainer({
         stagedCheckIn.routeAltitude ||
         getDefaultRouteAltitude(stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId),
       routeStartedAt: Date.now(),
-      inboundStartPosition: getInboundStartPosition(point.position),
+      inboundStartPosition: getInboundStartPosition(
+        point.position,
+        stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId
+      ),
       routedAt: new Date().toLocaleTimeString(),
     };
     window.localStorage.setItem(savedPendingCheckIn, JSON.stringify(tasking));
@@ -652,7 +656,10 @@ export default function MapTrainer({
         pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
       ),
       routeStartedAt: Date.now(),
-      inboundStartPosition: getInboundStartPosition(point.position),
+      inboundStartPosition: getInboundStartPosition(
+        point.position,
+        pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
+      ),
       routedAt: new Date().toLocaleTimeString(),
     };
 
@@ -769,7 +776,8 @@ export default function MapTrainer({
                 getDefaultRouteAltitude(currentPlatform.aircraft),
               routeStartedAt: Date.now(),
               inboundStartPosition:
-                currentTrack?.position || getInboundStartPosition(point.position),
+                currentTrack?.position ||
+                getInboundStartPosition(point.position, currentPlatform.aircraft),
               routedAt: new Date().toLocaleTimeString(),
               anchor: point.position,
             }
@@ -1408,7 +1416,8 @@ function getInboundPlatformTrack(platform, _tick) {
     Math.max(0, elapsed / getRouteTransitDurationMs(platform))
   );
   const inboundStart =
-    platform.inboundStartPosition || getInboundStartPosition(routePosition);
+    platform.inboundStartPosition ||
+    getInboundStartPosition(routePosition, platform.aircraft);
   const position = interpolatePosition(
     inboundStart,
     routePosition,
@@ -1439,7 +1448,11 @@ function getPendingPlatformTrack(pendingCheckIn, tick) {
     Math.max(0, elapsed / getRouteTransitDurationMs(pendingCheckIn))
   );
   const inboundStart =
-    pendingCheckIn.inboundStartPosition || getInboundStartPosition(routePosition);
+    pendingCheckIn.inboundStartPosition ||
+    getInboundStartPosition(
+      routePosition,
+      pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
+    );
   const aircraft = pendingCheckIn.aircraftLabel || "Pending aircraft";
 
   if (inboundProgress < 1) {
@@ -1520,7 +1533,10 @@ function getRouteableControlPoints(controlPoints, aircraft = "") {
 function getRouteTransitDurationMs(pendingCheckIn) {
   const from =
     pendingCheckIn.inboundStartPosition ||
-    getInboundStartPosition(pendingCheckIn.routePosition);
+    getInboundStartPosition(
+      pendingCheckIn.routePosition,
+      pendingCheckIn.aircraftLabel || pendingCheckIn.aircraft || pendingCheckIn.aircraftId
+    );
   const to = pendingCheckIn.routePosition;
   const distanceMetres = getDistanceMetres(from, to);
   const speedMps = getTransitSpeedMps(
@@ -1564,10 +1580,6 @@ function formatControlPointLabel(point) {
   if (rawName.startsWith(`${type} `)) return rawName;
 
   return `${type} ${rawName || "CONTROL"}`;
-}
-
-function getInboundStartPosition(routePosition) {
-  return offsetPosition(routePosition, -42000, -22000);
 }
 
 function getDefaultRouteAltitude(aircraft = "") {

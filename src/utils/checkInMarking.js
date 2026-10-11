@@ -157,6 +157,10 @@ export function markCheckInField(field, userValue, correctValue) {
   const user = normalise(userValue);
   const correct = normalise(correctValue);
 
+  if (field === "aircraftCallsign") {
+    return user.replace(/\s/g, "") === correct.replace(/\s/g, "");
+  }
+
   if (field === "downlinkCode") {
     return numbersOnly(user) === numbersOnly(correct);
   }

@@ -324,7 +324,7 @@ function formatMissionNumberForVoice(missionNumber) {
   return missionNumber.replace(
     /MISSION\s*([A-Z]+)(\d+)/,
     (_, letters, digits) =>
-      `MISSION ${lettersToPhonetics(letters)} ${digitsToWords(digits)}`
+      `MISSION NUMBER ${lettersToPhonetics(letters)} ${digitsToWords(digits)}`
   );
 }
 
@@ -332,7 +332,7 @@ function formatCallsignForVoice(callsign = "") {
   return callsign
     .toLowerCase()
     .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
-    .replace(/\d/g, (digit) => digitsToWords(digit).toLowerCase());
+    .replace(/\d+/g, (digits) => digitsToWords(digits).toLowerCase());
 }
 
 export function getAircraftOptions() {
@@ -396,7 +396,7 @@ export function generateCheckIn(selectedAircraftId = "random", options = {}) {
       ],
       voiceLines: [
         `${controllerCallsign}.`,
-        `THIS IS ${callsignVoice}.`,
+        `THIS IS ${callsignVoice}...`,
         `${missionNumberVoice}.`,
         `${aircraft.numberAndType}.`,
       ],

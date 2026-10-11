@@ -7,6 +7,7 @@ import { markCheckInField } from "../utils/checkInMarking.js";
 import { formatMgrs } from "../utils/mgrs.js";
 import { recordMissionEvent } from "../utils/missionEvents.js";
 import { getStableRadioVoice } from "../utils/radioVoiceAssignments.js";
+import { getInboundStartPosition } from "../utils/inboundRoute.js";
 
 const blankCheckIn = {
   aircraftCallsign: "",
@@ -687,7 +688,10 @@ export default function CheckIn({
         pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
       ),
       routeStartedAt: Date.now(),
-      inboundStartPosition: getInboundStartPosition(point.position),
+      inboundStartPosition: getInboundStartPosition(
+        point.position,
+        pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
+      ),
       routedAt: new Date().toLocaleTimeString(),
     };
 
@@ -1391,10 +1395,6 @@ export default function CheckIn({
   );
 }
 
-function getInboundStartPosition(routePosition) {
-  return offsetPosition(routePosition, -42000, -22000);
-}
-
 function isRotaryWingAircraft(aircraft = "") {
   const normalisedAircraft = aircraft.toUpperCase();
 
@@ -1475,15 +1475,4 @@ function getRouteableControlPoints(controlPoints, aircraft = "") {
   if (preferredPoints.length > 0) return preferredPoints;
   if (isRotaryWingAircraft(aircraft)) return legacyBattlePositions;
   return routeablePoints;
-}
-
-function offsetPosition(center, eastMetres, northMetres) {
-  const metresPerDegreeLat = 111320;
-  const metresPerDegreeLng =
-    111320 * Math.cos((center.lat * Math.PI) / 180);
-
-  return {
-    lat: center.lat + northMetres / metresPerDegreeLat,
-    lng: center.lng + eastMetres / metresPerDegreeLng,
-  };
 }

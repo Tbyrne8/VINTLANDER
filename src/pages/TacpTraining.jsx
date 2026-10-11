@@ -32,6 +32,7 @@ import {
   getReciprocalBattlePosition,
 } from "../utils/targetPlacement.js";
 import { getNextControlPointName } from "../utils/controlPointNames.js";
+import { getInboundStartPosition } from "../utils/inboundRoute.js";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -433,10 +434,6 @@ function formatControlPointLabel(point) {
   if (rawName.startsWith(`${type} `)) return rawName;
 
   return `${type} ${rawName || "CONTROL"}`;
-}
-
-function getInboundStartPosition(routePosition) {
-  return offsetPosition(routePosition, -42000, -22000);
 }
 
 function isRotaryWingAircraft(aircraft = "") {
@@ -2103,7 +2100,10 @@ export default function TacpTraining({
         pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
       ),
       routeStartedAt: Date.now(),
-      inboundStartPosition: getInboundStartPosition(point.position),
+      inboundStartPosition: getInboundStartPosition(
+        point.position,
+        pendingCheckIn.aircraftLabel || pendingCheckIn.aircraftId
+      ),
       routedAt: getTimestamp(),
     };
 
