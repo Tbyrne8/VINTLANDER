@@ -1077,7 +1077,8 @@ export default function MapTrainer({
           defaultCenter={position}
           zoom={zoom}
           mapTypeId={mapType}
-          gestureHandling="auto"
+          gestureHandling="greedy"
+          onZoomChanged={(event) => setZoom(event.detail.zoom)}
           disableDefaultUI={true}
         >
           <MapCentreTracker setPosition={setPosition} />
