@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Map } from "@vis.gl/react-google-maps";
 import * as mgrs from "mgrs";
-import { formatMgrs, parseMgrs } from "../utils/mgrs.js";
+import { formatMgrs, formatMgrsValue, parseMgrs } from "../utils/mgrs.js";
 import {
   generateCheckIn,
   getAircraftOptions,
@@ -267,8 +267,11 @@ const defaultAttackBrief = {
   friendlyTargetId: "",
   friendlyDirection: "SOUTH",
   friendlyDistanceMetres: "800",
-  egress: "AS DIRECTED",
+  egress: "AS DIRECTED, CURRENT HEIGHT BLOCK",
+  egressBase: "AS DIRECTED",
   egressMode: "mapped",
+  egressHeightMode: "current",
+  egressHeightFeet: "5000",
   egressDistanceNm: "5",
   egressDirection: "NORTH",
   echoPointGrid: "",
@@ -322,7 +325,15 @@ function buildNineLine(brief, target) {
     ["3", "Distance", brief.distance],
     ["4", "Target elevation", brief.elevation],
     ["5", "Target description", getTargetDescription(target)],
-    ["6", "Target location", target ? formatMgrs(target.position) : "NO GRID SAVED"],
+    [
+      "6",
+      "Target location",
+      target?.mgrs
+        ? formatMgrsValue(target.mgrs)
+        : target?.position
+          ? formatMgrs(target.position)
+          : "NO GRID SAVED",
+    ],
     ["7", "Type mark", brief.mark],
     ["8", "Location of friendlies", brief.friendlies],
     ["9", "Egress", brief.egress],
@@ -2731,7 +2742,9 @@ export default function TacpTraining({
             <small>Line 6 · Target location</small>
             <p>
               {selectedAttackTarget
-                ? formatMgrs(selectedAttackTarget.position)
+                ? selectedAttackTarget.mgrs
+                  ? formatMgrsValue(selectedAttackTarget.mgrs)
+                  : formatMgrs(selectedAttackTarget.position)
                 : "NO GRID SAVED"}
             </p>
           </div>

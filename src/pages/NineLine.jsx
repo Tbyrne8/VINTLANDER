@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { recordMissionEvent } from "../utils/missionEvents.js";
+import { formatMgrs, formatMgrsValue } from "../utils/mgrs.js";
 import NineLineIpBpField from "../components/NineLineIpBpField.jsx";
 import NineLineHeadingField from "../components/NineLineHeadingField.jsx";
 import NineLineDistanceField from "../components/NineLineDistanceField.jsx";
@@ -43,8 +44,11 @@ const defaultBrief = {
   friendlyTargetId: "",
   friendlyDirection: "SOUTH",
   friendlyDistanceMetres: "800",
-  egress: "AS DIRECTED",
+  egress: "AS DIRECTED, CURRENT HEIGHT BLOCK",
+  egressBase: "AS DIRECTED",
   egressMode: "mapped",
+  egressHeightMode: "current",
+  egressHeightFeet: "5000",
   egressDistanceNm: "5",
   egressDirection: "NORTH",
   echoPointGrid: "",
@@ -75,7 +79,9 @@ function getNowStamp() {
 }
 
 function formatTargetLocation(target) {
-  return target?.mgrs || "NO GRID SAVED";
+  if (target?.mgrs) return formatMgrsValue(target.mgrs);
+  if (target?.position) return formatMgrs(target.position);
+  return "NO GRID SAVED";
 }
 
 function getTargetDescription(target) {

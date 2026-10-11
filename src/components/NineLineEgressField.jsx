@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   formatNineLineControlPoint,
   getNineLineControlPointType,
@@ -8,6 +8,7 @@ import {
   echoSectors,
   egressCardinalDirections,
   formatCardinalEgress,
+  formatEgressWithHeight,
   formatEchoEgress,
   normaliseEgressDistance,
 } from "../utils/nineLineEgress.js";
@@ -30,28 +31,41 @@ export default function NineLineEgressField({
     [availablePoints]
   );
 
+  const updateEgress = useCallback((base) => {
+    updateBrief("egressBase", base);
+    updateBrief(
+      "egress",
+      formatEgressWithHeight(
+        base,
+        brief.egressHeightMode || "current",
+        brief.egressHeightFeet || "5000"
+      )
+    );
+  }, [brief.egressHeightFeet, brief.egressHeightMode, updateBrief]);
+
   useEffect(() => {
     if (mode !== "mapped") return;
-    if (availableLabels.includes(brief.egress)) return;
-    updateBrief("egress", availableLabels[0] || "AS DIRECTED");
-  }, [availableLabels, brief.egress, mode, updateBrief]);
+    const base = availableLabels.includes(brief.egressBase)
+      ? brief.egressBase
+      : availableLabels[0] || "AS DIRECTED";
+    if (brief.egressBase === base && brief.egress.startsWith(base)) return;
+    updateEgress(base);
+  }, [availableLabels, brief.egress, brief.egressBase, mode, updateEgress]);
 
   function setMode(nextMode) {
     updateBrief("egressMode", nextMode);
 
     if (nextMode === "mapped") {
-      updateBrief("egress", availableLabels[0] || "AS DIRECTED");
+      updateEgress(availableLabels[0] || "AS DIRECTED");
     } else if (nextMode === "cardinal") {
-      updateBrief(
-        "egress",
+      updateEgress(
         formatCardinalEgress(
           brief.egressDistanceNm || "5",
           brief.egressDirection || "NORTH"
         )
       );
     } else {
-      updateBrief(
-        "egress",
+      updateEgress(
         formatEchoEgress(
           brief.echoPointGrid || "",
           brief.echoSector || "ALPHA",
@@ -69,7 +83,7 @@ export default function NineLineEgressField({
     const distance = field === "egressDistanceNm" ? value : brief.egressDistanceNm || "5";
     const direction = field === "egressDirection" ? value : brief.egressDirection || "NORTH";
     updateBrief(field, value);
-    updateBrief("egress", formatCardinalEgress(distance, direction));
+    updateEgress(formatCardinalEgress(distance, direction));
   }
 
   function setEcho(field, rawValue) {
@@ -81,7 +95,21 @@ export default function NineLineEgressField({
     const sector = field === "echoSector" ? value : brief.echoSector || "ALPHA";
     const distance = field === "echoDistanceNm" ? value : brief.echoDistanceNm || "5";
     updateBrief(field, value);
-    updateBrief("egress", formatEchoEgress(grid, sector, distance));
+    updateEgress(formatEchoEgress(grid, sector, distance));
+  }
+
+  function setHeight(field, value) {
+    const modeValue = field === "egressHeightMode" ? value : brief.egressHeightMode || "current";
+    const feetValue = field === "egressHeightFeet" ? value : brief.egressHeightFeet || "5000";
+    updateBrief(field, value);
+    updateBrief(
+      "egress",
+      formatEgressWithHeight(
+        brief.egressBase || "AS DIRECTED",
+        modeValue,
+        feetValue
+      )
+    );
   }
 
   return (
@@ -100,7 +128,7 @@ export default function NineLineEgressField({
           Egress {requiredType.toUpperCase()}
           <select
             value={availableLabels.includes(brief.egress) ? brief.egress : ""}
-            onChange={(event) => updateBrief("egress", event.target.value)}
+            onChange={(event) => updateEgress(event.target.value)}
           >
             {!availablePoints.length && (
               <option value="">No {requiredType.toUpperCase()} markers on map</option>
@@ -185,6 +213,37 @@ export default function NineLineEgressField({
           </p>
         </>
       )}
+
+      <div className="grid compactGrid">
+        <label className="field">
+          Egress height block
+          <select
+            value={brief.egressHeightMode || "current"}
+            onChange={(event) => setHeight("egressHeightMode", event.target.value)}
+          >
+            <option value="current">Current height block</option>
+            <option value="amend">Amend height block</option>
+          </select>
+        </label>
+
+        {(brief.egressHeightMode || "current") === "amend" && (
+          <label className="field">
+            New height block
+            <select
+              value={brief.egressHeightFeet || "5000"}
+              onChange={(event) => setHeight("egressHeightFeet", event.target.value)}
+            >
+              {Array.from({ length: 30 }, (_, index) => (index + 1) * 1000).map(
+                (feet) => (
+                  <option key={feet} value={feet}>
+                    {feet} FT
+                  </option>
+                )
+              )}
+            </select>
+          </label>
+        )}
+      </div>
     </div>
   );
 }

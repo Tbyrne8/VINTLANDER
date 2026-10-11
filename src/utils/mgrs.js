@@ -10,9 +10,15 @@ export function parseMgrs(value) {
 export function formatMgrs(position) {
   if (!position) return "NOT SET";
 
-  return mgrs
-    .forward([position.lng, position.lat])
-    .replace(/^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/, "$1 $2 $3 $4");
+  return formatMgrsValue(mgrs.forward([position.lng, position.lat]));
+}
+
+export function formatMgrsValue(value) {
+  const normalised = normaliseMgrs(value);
+  return normalised.replace(
+    /^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/,
+    "$1 $2 $3 $4"
+  );
 }
 
 export function normaliseMgrs(value) {
