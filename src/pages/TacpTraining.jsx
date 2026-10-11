@@ -12,6 +12,7 @@ import ObserverMarker from "../components/ObserverMarker.jsx";
 import ControlPointMarkers from "../components/ControlPointMarkers.jsx";
 import MissionRadioPanel from "../components/MissionRadioPanel.jsx";
 import AttackRunMap from "../components/AttackRunMap.jsx";
+import { getAttackTimingText } from "../utils/attackTiming.js";
 import DsMissionControl from "../components/DsMissionControl.jsx";
 import ArtilleryOverlay from "../components/ArtilleryOverlay.jsx";
 import NineLineIpBpField from "../components/NineLineIpBpField.jsx";
@@ -33,6 +34,10 @@ import {
 } from "../utils/targetPlacement.js";
 import { getNextControlPointName } from "../utils/controlPointNames.js";
 import { getInboundStartPosition } from "../utils/inboundRoute.js";
+import {
+  getTargetDescription,
+  getTargetOptionLabel,
+} from "../utils/targetDescription.js";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -239,7 +244,7 @@ const defaultAttackStatus = {
   attackRunStartedAt: null,
   attackRunDurationMs: 90000,
   bdaAvailableAt: null,
-  bdaDelayMs: 45000,
+  bdaDelayMs: 15000,
   phaseStartedAt: null,
   attackPlatform: null,
   attackTarget: null,
@@ -318,11 +323,6 @@ function getTaskKey(phaseId, taskIndex) {
 
 function getDefaultCallsigns() {
   return ["VINTAGE 10", "VINTAGE 11", "CHAOS 20", "WIDOW 30"];
-}
-
-function getTargetDescription(target) {
-  if (!target) return "NO TARGET SELECTED";
-  return [target.type, target.description].filter(Boolean).join(" - ");
 }
 
 function buildNineLine(brief, target) {
@@ -500,9 +500,12 @@ function createSelfLedTarget(opPosition, existingTargets, controlPoints = []) {
       return Number.isFinite(number) ? Math.max(highest, number) : highest;
     }, 0) + 1;
 
+  const targetId = `TGT-${String(nextNumber).padStart(3, "0")}`;
+
   return {
-    id: `TGT-${String(nextNumber).padStart(3, "0")}`,
-    description: "Enemy position for self-led target development",
+    id: targetId,
+    name: targetId,
+    description: targetId,
     type: "enemy",
     position,
     mgrs: mgrs.forward([position.lng, position.lat]),
@@ -883,16 +886,11 @@ export default function TacpTraining({
     () => buildNineLine(attackBriefDraft, selectedAttackTarget),
     [attackBriefDraft, selectedAttackTarget]
   );
-  const attackRunEndsAt = attackStatus.attackRunStartedAt
-    ? attackStatus.attackRunStartedAt + (attackStatus.attackRunDurationMs || 90000)
-    : null;
   const attackTimerNow = attackStatus.pausedAt || attackClock;
-  const attackRunRemainingMs = attackRunEndsAt
-    ? Math.max(0, attackRunEndsAt - attackTimerNow)
-    : 0;
   const bdaRemainingMs = attackStatus.bdaAvailableAt
     ? Math.max(0, attackStatus.bdaAvailableAt - attackTimerNow)
     : 0;
+  const attackTimingText = getAttackTimingText(attackStatus, attackTimerNow);
   const canSendBda =
     Boolean(attackStatus.bdaAvailableAt) && bdaRemainingMs === 0;
 
@@ -950,9 +948,7 @@ export default function TacpTraining({
       attackRunStartedAt: null,
       bdaAvailableAt: null,
       bda: `${callsign || "Aircraft"} returned to ${routeLabel} and resumed normal tasking.`,
-      attackPlatform: current.attackPlatform
-        ? { ...current.attackPlatform, routePosition }
-        : current.attackPlatform,
+      attackPlatform: null,
     }));
   }, [
     attackStatus.attackPlatform,
@@ -1054,7 +1050,7 @@ export default function TacpTraining({
       weaponReleasedAt: current.weaponReleasedAt || now - 30000,
       weaponImpactAt: now,
       impactObservedAt: now,
-      egressStartedAt: now,
+      egressStartedAt: current.egressStartedAt || now,
       bdaAvailableAt: now,
       bda: formatGeneratedBda(outcome, distance),
     }));
@@ -1743,6 +1739,7 @@ export default function TacpTraining({
         aircraft: selectedAttackPlatform.aircraft,
         positionAltitude: selectedAttackPlatform.positionAltitude,
         capabilities: selectedAttackPlatform.capabilities,
+        ordnance: selectedAttackPlatform.ordnance,
         routePosition: selectedAttackPlatform.routePosition,
         routedControlPoint: selectedAttackPlatform.routedControlPoint,
       },
@@ -1836,11 +1833,7 @@ export default function TacpTraining({
         selectedAttackPlatform?.aircraft ||
         selectedPlatform?.aircraft
     );
-    const bdaDelayMs = getBdaDelayMs(
-      linkedAttackBrief?.platform?.aircraft ||
-        selectedAttackPlatform?.aircraft ||
-        selectedPlatform?.aircraft
-    );
+    const bdaDelayMs = 15000;
 
     setAttackStatus((current) => ({
       ...current,
@@ -1850,6 +1843,7 @@ export default function TacpTraining({
         ? {
             callsign: attackPlatform.callsign,
             aircraft: attackPlatform.aircraft,
+            ordnance: attackPlatform.ordnance,
             routePosition: attackPlatform.routePosition,
           }
         : current.attackPlatform,
@@ -1887,8 +1881,8 @@ export default function TacpTraining({
           ? `Cleared hot. Attack run in progress; BDA expected in ${formatCountdown(attackRunDurationMs + bdaDelayMs)}.`
           : releasesWeapon
             ? `Weapon away. Impact expected in ${formatCountdown(weaponTimeToImpactMs)}.`
-            : observesImpact && current.weaponOutcome
-              ? formatGeneratedBda(current.weaponOutcome, current.missDistanceMetres)
+            : observesImpact
+              ? "Splash observed. Aircraft assessing effects."
           : current.bda,
       weaponReleasedAt:
         phase === "IP inbound" ? null : releasesWeapon ? now : current.weaponReleasedAt,
@@ -1957,7 +1951,7 @@ export default function TacpTraining({
       reattack: reattackDecision,
       bdaAvailableAt: null,
       phaseStartedAt: now,
-      egressStartedAt: now,
+      egressStartedAt: current.egressStartedAt || now,
     }));
     setCompletedTasks((current) => ({
       ...current,
@@ -1983,6 +1977,7 @@ export default function TacpTraining({
           aircraft: selectedAttackPlatform.aircraft,
           positionAltitude: selectedAttackPlatform.positionAltitude,
           capabilities: selectedAttackPlatform.capabilities,
+          ordnance: selectedAttackPlatform.ordnance,
           routePosition: selectedAttackPlatform.routePosition,
           routedControlPoint: selectedAttackPlatform.routedControlPoint,
         },
@@ -2056,7 +2051,7 @@ export default function TacpTraining({
       reattack: requiresReattack ? "Re-attack requested" : "No re-attack required",
       bdaAvailableAt: null,
       phaseStartedAt: now,
-      egressStartedAt: now,
+      egressStartedAt: current.egressStartedAt || now,
     }));
     setCompletedTasks((current) => ({
       ...current,
@@ -2678,7 +2673,7 @@ export default function TacpTraining({
               targets.map((target) => (
                 <div key={target.id} className="dataRow">
                   <span>{target.id}</span>
-                  <strong>{target.description}</strong>
+                  <strong>{getTargetDescription(target)}</strong>
                 </div>
               ))
             )}
@@ -2739,13 +2734,7 @@ export default function TacpTraining({
           <div className="dataRow">
             <span>Strike timing</span>
             <strong>
-              {attackRunRemainingMs > 0
-                ? `Attack run ${formatCountdown(attackRunRemainingMs)}`
-                  : bdaRemainingMs > 0
-                    ? `BDA in ${formatCountdown(bdaRemainingMs)}`
-                    : attackStatus.bdaAvailableAt
-                      ? "BDA available"
-                    : "Awaiting clearance"}
+              {attackTimingText}
             </strong>
           </div>
           <div className="dataRow">
@@ -2798,7 +2787,7 @@ export default function TacpTraining({
                 {!targets.length && <option value="">No plotted targets</option>}
                 {targets.map((target) => (
                   <option key={target.id} value={target.id}>
-                    {target.id} - {target.description || target.type}
+                    {getTargetOptionLabel(target)}
                   </option>
                 ))}
               </select>
@@ -2983,14 +2972,22 @@ export default function TacpTraining({
 
           <MissionRadioPanel
             controllerCallsign={controller.callsign}
-            platform={linkedAttackBrief?.platform || selectedAttackPlatform}
+            platform={
+              linkedAttackBrief?.platform
+                ? {
+                    ...linkedAttackBrief.platform,
+                    ordnance:
+                      linkedAttackBrief.platform.ordnance ||
+                      selectedAttackPlatform?.ordnance,
+                  }
+                : selectedAttackPlatform
+            }
             target={linkedAttackBrief?.target || selectedAttackTarget}
             brief={linkedAttackBrief?.brief || attackBriefDraft}
             briefReady={Boolean(linkedAttackBrief)}
             lines={linkedAttackBrief?.lines || attackNineLines}
             readbackState={attackReadbackState}
             attackStatus={attackStatus}
-            attackRunRemainingMs={attackRunRemainingMs}
             canSendBda={canSendBda}
             bdaEffect={
               attackStatus.weaponOutcome
@@ -3856,13 +3853,7 @@ export default function TacpTraining({
               <div className="dataRow">
                 <span>Strike timing</span>
                 <strong>
-                  {attackRunRemainingMs > 0
-                    ? `Attack run ${formatCountdown(attackRunRemainingMs)}`
-                      : bdaRemainingMs > 0
-                        ? `BDA in ${formatCountdown(bdaRemainingMs)}`
-                        : attackStatus.bdaAvailableAt
-                          ? "BDA available"
-                        : "Awaiting clearance"}
+                  {attackTimingText}
                 </strong>
               </div>
 
@@ -4227,20 +4218,6 @@ function getAttackRunDurationMs(aircraft = "") {
   }
 
   return 90000;
-}
-
-function getBdaDelayMs(aircraft = "") {
-  const normalisedAircraft = aircraft.toUpperCase();
-
-  if (normalisedAircraft.includes("APACHE") || normalisedAircraft.includes("HELI")) {
-    return 30000;
-  }
-
-  if (normalisedAircraft.includes("MQ-9") || normalisedAircraft.includes("REAPER")) {
-    return 60000;
-  }
-
-  return 45000;
 }
 
 function getWeaponTimeToImpactMs(aircraft = "") {

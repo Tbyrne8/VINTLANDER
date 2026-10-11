@@ -23,7 +23,13 @@ function impactIcon(outcome = "hit") {
 
 export default function AttackRunMarkers({ attackStatus, brief, platform, now }) {
   const geometry = getAttackRunGeometry(attackStatus, brief, platform, now);
-  if (!geometry || !attackStatus?.attackPlatform) return null;
+  if (
+    !geometry ||
+    !attackStatus?.attackPlatform ||
+    attackStatus.phase === "On station"
+  ) {
+    return null;
+  }
 
   return (
     <>

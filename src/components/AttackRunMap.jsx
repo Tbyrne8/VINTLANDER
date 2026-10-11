@@ -37,9 +37,11 @@ export default function AttackRunMap({ attackStatus, brief, platform }) {
       <div className="attackRunMapStatus">
         <strong>{attackStatus.phase}</strong>
         <span>
-          {attackStatus.weaponOutcome
+          {attackStatus.weaponOutcome && !attackStatus.bdaAvailableAt
             ? `${attackStatus.weaponOutcome.toUpperCase()} / ${Math.round(attackStatus.missDistanceMetres || 0)}M`
-            : "NO WEAPON RELEASE"}
+            : attackStatus.weaponReleasedAt
+              ? "EFFECTS ASSESSMENT PENDING"
+              : "NO WEAPON RELEASE"}
         </span>
       </div>
     </div>

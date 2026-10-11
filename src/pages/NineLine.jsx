@@ -6,6 +6,10 @@ import NineLineHeadingField from "../components/NineLineHeadingField.jsx";
 import NineLineDistanceField from "../components/NineLineDistanceField.jsx";
 import NineLineEgressField from "../components/NineLineEgressField.jsx";
 import NineLineFriendliesField from "../components/NineLineFriendliesField.jsx";
+import {
+  getTargetDescription,
+  getTargetOptionLabel,
+} from "../utils/targetDescription.js";
 
 const savedTargets = "vintlander.targets";
 const savedBriefs = "vintlander.attackBriefs";
@@ -93,11 +97,6 @@ function formatTargetLocation(target) {
   if (target?.mgrs) return formatMgrsValue(target.mgrs);
   if (target?.position) return formatMgrs(target.position);
   return "NO GRID SAVED";
-}
-
-function getTargetDescription(target) {
-  if (!target) return "NO TARGET SELECTED";
-  return [target.type, target.description].filter(Boolean).join(" - ");
 }
 
 function buildNineLine(brief, target) {
@@ -214,6 +213,7 @@ export default function NineLine({
         aircraft: selectedPlatform.aircraft,
         positionAltitude: selectedPlatform.positionAltitude,
         capabilities: selectedPlatform.capabilities,
+        ordnance: selectedPlatform.ordnance,
         routePosition: selectedPlatform.routePosition,
         routedControlPoint: selectedPlatform.routedControlPoint,
       },
@@ -303,7 +303,7 @@ export default function NineLine({
               {!targets.length && <option value="">No saved targets</option>}
               {targets.map((target) => (
                 <option key={target.id} value={target.id}>
-                  {target.id} - {target.description || target.type}
+                  {getTargetOptionLabel(target)}
                 </option>
               ))}
             </select>
