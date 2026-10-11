@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { recordMissionEvent } from "../utils/missionEvents.js";
+import NineLineIpBpField from "../components/NineLineIpBpField.jsx";
+import NineLineHeadingField from "../components/NineLineHeadingField.jsx";
+import NineLineDistanceField from "../components/NineLineDistanceField.jsx";
+import NineLineEgressField from "../components/NineLineEgressField.jsx";
+import NineLineFriendliesField from "../components/NineLineFriendliesField.jsx";
 
 const savedTargets = "vintlander.targets";
 const savedBriefs = "vintlander.attackBriefs";
 const savedAttackStatus = "vintlander.attackStatus";
+const savedControlPoints = "vintlander.controlPoints";
+const standaloneSavedControlPoints = "vintlander.standalone.controlPoints";
 
 function SerialWorkflowNav({ onNavigate }) {
   return (
@@ -18,12 +25,31 @@ function SerialWorkflowNav({ onNavigate }) {
 
 const defaultBrief = {
   ipBp: "CURRENT HOLD",
+  ipBpMode: "mapped",
+  ipBpDistance: "5 NM",
+  ipBpDirection: "NORTH",
   heading: "AS REQUIRED",
-  distance: "AS REQUIRED",
+  headingMode: "asRequired",
+  headingCardinal: "NORTH TO SOUTH",
+  headingCardinalTolerance: "",
+  headingDegrees: "280",
+  headingTolerance: "30",
+  distance: "4 NAUTICAL MILES",
+  distanceNm: "4",
   elevation: "UNKNOWN",
   mark: "TALK-ON",
   friendlies: "UNKNOWN",
+  friendliesMode: "mapped",
+  friendlyTargetId: "",
+  friendlyDirection: "SOUTH",
+  friendlyDistanceMetres: "800",
   egress: "AS DIRECTED",
+  egressMode: "mapped",
+  egressDistanceNm: "5",
+  egressDirection: "NORTH",
+  echoPointGrid: "",
+  echoSector: "ALPHA",
+  echoDistanceNm: "5",
   controlType: "TYPE 2",
   attackMethod: "BOT",
   restrictions: "CLEARED HOT ON CONTROL ONLY",
@@ -65,8 +91,8 @@ function buildNineLine(brief, target) {
     ["4", "Target elevation", brief.elevation],
     ["5", "Target description", getTargetDescription(target)],
     ["6", "Target location", formatTargetLocation(target)],
-    ["7", "Mark", brief.mark],
-    ["8", "Friendlies", brief.friendlies],
+    ["7", "Type mark", brief.mark],
+    ["8", "Location of friendlies", brief.friendlies],
     ["9", "Egress", brief.egress],
   ];
 }
@@ -97,6 +123,9 @@ export default function NineLine({
 }) {
   const [targets, setTargets] = useState(() => loadSavedList(savedTargets));
   const [briefs, setBriefs] = useState(() => loadSavedList(savedBriefs));
+  const [controlPoints] = useState(() =>
+    loadSavedList(serialMode ? savedControlPoints : standaloneSavedControlPoints)
+  );
   const [selectedPlatformId, setSelectedPlatformId] = useState("");
   const [selectedTargetId, setSelectedTargetId] = useState("");
   const [brief, setBrief] = useState(defaultBrief);
@@ -284,73 +313,62 @@ export default function NineLine({
             </label>
           </div>
 
-          <div className="grid compactGrid">
-            <label className="field">
-              IP / BP
-              <input
-                value={brief.ipBp}
-                onChange={(event) => updateBrief("ipBp", event.target.value)}
-              />
-            </label>
+          <NineLineIpBpField
+            brief={brief}
+            platform={selectedPlatform}
+            controlPoints={controlPoints}
+            updateBrief={updateBrief}
+          />
 
-            <label className="field">
-              Mark
-              <select
-                value={brief.mark}
-                onChange={(event) => updateBrief("mark", event.target.value)}
-              >
-                <option>TALK-ON</option>
-                <option>LASER</option>
-                <option>IR POINTER</option>
-                <option>SMOKE</option>
-                <option>NONE</option>
-              </select>
-            </label>
+          <NineLineHeadingField brief={brief} updateBrief={updateBrief} />
+
+          <NineLineDistanceField brief={brief} updateBrief={updateBrief} />
+
+          <label className="field">
+            Target elevation
+            <input
+              value={brief.elevation}
+              onChange={(event) => updateBrief("elevation", event.target.value)}
+            />
+          </label>
+
+          <div className="serialCard">
+            <small>Line 5 · Target description</small>
+            <p>{getTargetDescription(selectedTarget)}</p>
           </div>
 
-          <div className="grid compactGrid">
-            <label className="field">
-              Heading
-              <input
-                value={brief.heading}
-                onChange={(event) => updateBrief("heading", event.target.value)}
-              />
-            </label>
-
-            <label className="field">
-              Distance
-              <input
-                value={brief.distance}
-                onChange={(event) => updateBrief("distance", event.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className="grid compactGrid">
-            <label className="field">
-              Target elevation
-              <input
-                value={brief.elevation}
-                onChange={(event) => updateBrief("elevation", event.target.value)}
-              />
-            </label>
-
-            <label className="field">
-              Egress
-              <input
-                value={brief.egress}
-                onChange={(event) => updateBrief("egress", event.target.value)}
-              />
-            </label>
+          <div className="serialCard">
+            <small>Line 6 · Target location</small>
+            <p>{formatTargetLocation(selectedTarget)}</p>
           </div>
 
           <label className="field">
-            Friendlies
-            <input
-              value={brief.friendlies}
-              onChange={(event) => updateBrief("friendlies", event.target.value)}
-            />
+            Line 7 type mark
+            <select
+              value={brief.mark}
+              onChange={(event) => updateBrief("mark", event.target.value)}
+            >
+              <option>TALK-ON</option>
+              <option>LASER</option>
+              <option>IR POINTER</option>
+              <option>SMOKE</option>
+              <option>NONE</option>
+            </select>
           </label>
+
+          <NineLineFriendliesField
+            brief={brief}
+            targets={targets}
+            attackTarget={selectedTarget}
+            updateBrief={updateBrief}
+          />
+
+          <NineLineEgressField
+            brief={brief}
+            platform={selectedPlatform}
+            controlPoints={controlPoints}
+            updateBrief={updateBrief}
+          />
 
           <label className="field">
             Restrictions

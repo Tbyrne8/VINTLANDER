@@ -14,6 +14,11 @@ import MissionRadioPanel from "../components/MissionRadioPanel.jsx";
 import AttackRunMap from "../components/AttackRunMap.jsx";
 import DsMissionControl from "../components/DsMissionControl.jsx";
 import ArtilleryOverlay from "../components/ArtilleryOverlay.jsx";
+import NineLineIpBpField from "../components/NineLineIpBpField.jsx";
+import NineLineHeadingField from "../components/NineLineHeadingField.jsx";
+import NineLineDistanceField from "../components/NineLineDistanceField.jsx";
+import NineLineEgressField from "../components/NineLineEgressField.jsx";
+import NineLineFriendliesField from "../components/NineLineFriendliesField.jsx";
 import {
   clearMissionEvents,
   loadMissionEvents,
@@ -244,12 +249,31 @@ const defaultAttackBrief = {
   controlType: "TYPE 2",
   attackMethod: "BOT",
   ipBp: "CURRENT HOLD",
+  ipBpMode: "mapped",
+  ipBpDistance: "5 NM",
+  ipBpDirection: "NORTH",
   heading: "AS REQUIRED",
-  distance: "AS REQUIRED",
+  headingMode: "asRequired",
+  headingCardinal: "NORTH TO SOUTH",
+  headingCardinalTolerance: "",
+  headingDegrees: "280",
+  headingTolerance: "30",
+  distance: "4 NAUTICAL MILES",
+  distanceNm: "4",
   elevation: "UNKNOWN",
   mark: "TALK-ON",
   friendlies: "UNKNOWN",
+  friendliesMode: "mapped",
+  friendlyTargetId: "",
+  friendlyDirection: "SOUTH",
+  friendlyDistanceMetres: "800",
   egress: "AS DIRECTED",
+  egressMode: "mapped",
+  egressDistanceNm: "5",
+  egressDirection: "NORTH",
+  echoPointGrid: "",
+  echoSector: "ALPHA",
+  echoDistanceNm: "5",
   restrictions: "CLEARED HOT ON CONTROL ONLY",
   remarks: "",
 };
@@ -299,8 +323,8 @@ function buildNineLine(brief, target) {
     ["4", "Target elevation", brief.elevation],
     ["5", "Target description", getTargetDescription(target)],
     ["6", "Target location", target ? formatMgrs(target.position) : "NO GRID SAVED"],
-    ["7", "Mark", brief.mark],
-    ["8", "Friendlies", brief.friendlies],
+    ["7", "Type mark", brief.mark],
+    ["8", "Location of friendlies", brief.friendlies],
     ["9", "Egress", brief.egress],
   ];
 }
@@ -2671,85 +2695,74 @@ export default function TacpTraining({
             </label>
           </div>
 
-          <div className="grid compactGrid">
-            <label className="field">
-              IP / BP
-              <input
-                value={attackBriefDraft.ipBp}
-                onChange={(event) =>
-                  updateAttackBrief("ipBp", event.target.value.toUpperCase())
-                }
-              />
-            </label>
+          <NineLineIpBpField
+            brief={attackBriefDraft}
+            platform={selectedAttackPlatform}
+            controlPoints={controlPoints}
+            updateBrief={updateAttackBrief}
+          />
 
-            <label className="field">
-              Mark
-              <select
-                value={attackBriefDraft.mark}
-                onChange={(event) => updateAttackBrief("mark", event.target.value)}
-              >
-                <option>TALK-ON</option>
-                <option>LASER</option>
-                <option>IR POINTER</option>
-                <option>SMOKE</option>
-                <option>NONE</option>
-              </select>
-            </label>
-          </div>
+          <NineLineHeadingField
+            brief={attackBriefDraft}
+            updateBrief={updateAttackBrief}
+          />
 
-          <div className="grid compactGrid">
-            <label className="field">
-              Heading
-              <input
-                value={attackBriefDraft.heading}
-                onChange={(event) =>
-                  updateAttackBrief("heading", event.target.value.toUpperCase())
-                }
-              />
-            </label>
-
-            <label className="field">
-              Distance
-              <input
-                value={attackBriefDraft.distance}
-                onChange={(event) =>
-                  updateAttackBrief("distance", event.target.value.toUpperCase())
-                }
-              />
-            </label>
-          </div>
-
-          <div className="grid compactGrid">
-            <label className="field">
-              Target elevation
-              <input
-                value={attackBriefDraft.elevation}
-                onChange={(event) =>
-                  updateAttackBrief("elevation", event.target.value.toUpperCase())
-                }
-              />
-            </label>
-
-            <label className="field">
-              Egress
-              <input
-                value={attackBriefDraft.egress}
-                onChange={(event) =>
-                  updateAttackBrief("egress", event.target.value.toUpperCase())
-                }
-              />
-            </label>
-          </div>
+          <NineLineDistanceField
+            brief={attackBriefDraft}
+            updateBrief={updateAttackBrief}
+          />
 
           <label className="field">
-            Friendlies
+            Target elevation
             <input
-              value={attackBriefDraft.friendlies}
+              value={attackBriefDraft.elevation}
               onChange={(event) =>
-                updateAttackBrief("friendlies", event.target.value.toUpperCase())
+                updateAttackBrief("elevation", event.target.value.toUpperCase())
               }
             />
           </label>
+
+          <div className="serialCard">
+            <small>Line 5 · Target description</small>
+            <p>{getTargetDescription(selectedAttackTarget)}</p>
+          </div>
+
+          <div className="serialCard">
+            <small>Line 6 · Target location</small>
+            <p>
+              {selectedAttackTarget
+                ? formatMgrs(selectedAttackTarget.position)
+                : "NO GRID SAVED"}
+            </p>
+          </div>
+
+          <label className="field">
+            Line 7 type mark
+            <select
+              value={attackBriefDraft.mark}
+              onChange={(event) => updateAttackBrief("mark", event.target.value)}
+            >
+              <option>TALK-ON</option>
+              <option>LASER</option>
+              <option>IR POINTER</option>
+              <option>SMOKE</option>
+              <option>NONE</option>
+            </select>
+          </label>
+
+          <NineLineFriendliesField
+            brief={attackBriefDraft}
+            targets={targets}
+            attackTarget={selectedAttackTarget}
+            updateBrief={updateAttackBrief}
+          />
+
+          <NineLineEgressField
+            brief={attackBriefDraft}
+            platform={selectedAttackPlatform}
+            controlPoints={controlPoints}
+            updateBrief={updateAttackBrief}
+          />
 
           <label className="field">
             Restrictions
