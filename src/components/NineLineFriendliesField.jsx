@@ -10,12 +10,13 @@ export default function NineLineFriendliesField({
   brief,
   targets = [],
   attackTarget,
+  observerPosition,
   updateBrief,
 }) {
   const mode = brief.friendliesMode || "mapped";
   const references = useMemo(
-    () => getFriendlyReferences(targets, attackTarget),
-    [attackTarget, targets]
+    () => getFriendlyReferences(targets, attackTarget, observerPosition),
+    [attackTarget, observerPosition, targets]
   );
   const selectedReference = references.find(
     (reference) => reference.id === brief.friendlyTargetId

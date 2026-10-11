@@ -10,6 +10,62 @@ textarea {
   font: inherit;
 }
 
+.mapDeconflictionPanel {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #3f563f;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.mapDeconflictionPanel h3 {
+  margin-top: 0;
+  color: #f5c542;
+}
+
+.deconflictionList {
+  display: grid;
+  gap: 10px;
+}
+
+.deconflictionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #4c634c;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.deconflictionRow > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.deconflictionRow span,
+.deconflictionRow small {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #d6dec2;
+}
+
+.deconflictionRow label {
+  display: block;
+  min-width: 0;
+}
+
+.deconflictionRow select {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.pushDeconflictionButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .app {
   min-height: 100vh;
 }
@@ -53,6 +109,37 @@ textarea {
 .serialBar div {
   display: flex;
   gap: 8px;
+}
+
+.selfLedWorkflowBar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  height: 54px;
+  box-sizing: border-box;
+  padding: 7px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #101810;
+  border-bottom: 2px solid #f5c542;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.35);
+}
+
+.selfLedWorkflowBar button {
+  min-width: 0;
+  border: 1px solid #4c634c;
+  border-radius: 8px;
+  background: #263626;
+  color: #ffffff;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.selfLedWorkflowBar button.active {
+  border-color: #f5c542;
+  background: #465a28;
+  color: #fff2a8;
 }
 
 .serialMode .trainingPage {
@@ -305,6 +392,16 @@ textarea {
 
   .linkedSessionBar {
     flex-wrap: wrap;
+  }
+
+  .selfLedWorkflowBar {
+    gap: 4px;
+    padding: 7px 6px;
+  }
+
+  .selfLedWorkflowBar button {
+    padding: 6px 4px;
+    font-size: 0.78rem;
   }
 
   .briefGrid,

@@ -653,12 +653,14 @@ export default function TacpTraining({
   }, [completedTasks]);
 
   useEffect(() => {
-    if (linkedRole === "ds") {
+    if (serialVariant === "self") {
+      setActiveView("trainee");
+    } else if (linkedRole === "ds") {
       setActiveView("instructor");
     } else if (linkedRole === "trainee") {
       setActiveView("trainee");
     }
-  }, [linkedRole]);
+  }, [linkedRole, serialVariant]);
 
   useEffect(() => {
     const applyLinkedState = () => {
@@ -2450,7 +2452,7 @@ export default function TacpTraining({
         </div>
       </header>
 
-      {serialMode && (
+      {serialMode && serialVariant !== "self" && (
         <section className="missionLauncher">
           <button onClick={() => onNavigate("checkin")}>Check-In</button>
           <button onClick={() => onNavigate("map")}>Map / OP</button>
@@ -2465,7 +2467,7 @@ export default function TacpTraining({
         >
           Exercising Troop
         </button>
-        {linkedRole !== "trainee" && (
+        {linkedRole !== "trainee" && serialVariant !== "self" && (
           <button
             className={activeView === "instructor" ? "active" : ""}
             onClick={() => setActiveView("instructor")}
@@ -3079,7 +3081,9 @@ export default function TacpTraining({
         </>
       )}
 
-      {activeView === "instructor" && linkedRole !== "trainee" && (
+      {activeView === "instructor" &&
+        linkedRole !== "trainee" &&
+        serialVariant !== "self" && (
         <>
           <DsMissionControl
             events={missionEvents}

@@ -836,11 +836,11 @@ export default function CheckIn({
   return (
     <main className="kneeboardPage">
       <div className="pageBackRow">
-        {serialMode ? (
+        {serialMode && serialVariant !== "self" ? (
           <SerialWorkflowNav onNavigate={onNavigate} />
-        ) : (
+        ) : !serialMode ? (
           <button onClick={() => onNavigate("home")}>Home</button>
-        )}
+        ) : null}
       </div>
 
       <section className="kneeboardCard">

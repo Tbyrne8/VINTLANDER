@@ -279,6 +279,11 @@ export default function App() {
     serialVariant === "self" &&
     page === "map" &&
     Boolean(window.localStorage.getItem("vintlander.stagedCheckIn"));
+  const selfLedWorkflowReady =
+    serialMode &&
+    serialVariant === "self" &&
+    (Boolean(window.localStorage.getItem("vintlander.pendingCheckIn")) ||
+      platforms.length > 0);
 
   return (
     <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
@@ -302,7 +307,36 @@ export default function App() {
           </nav>
         )}
 
-        {serialMode && page !== "tacp" && !isSelfLedMapSetup && (
+        {selfLedWorkflowReady && !isSelfLedMapSetup && (
+          <nav className="selfLedWorkflowBar" aria-label="Self-led serial workflow">
+            <button
+              className={page === "tacp" ? "active" : ""}
+              onClick={() => goToPage("tacp")}
+            >
+              Mission
+            </button>
+            <button
+              className={page === "checkin" ? "active" : ""}
+              onClick={() => goToPage("checkin")}
+            >
+              Check-In
+            </button>
+            <button
+              className={page === "map" ? "active" : ""}
+              onClick={() => goToPage("map")}
+            >
+              Map / OP
+            </button>
+            <button
+              className={page === "nine" ? "active" : ""}
+              onClick={() => goToPage("nine")}
+            >
+              Build 9-Line
+            </button>
+          </nav>
+        )}
+
+        {serialMode && serialVariant !== "self" && page !== "tacp" && !isSelfLedMapSetup && (
           <div className="serialBar">
             <strong>
               {serialVariant === "self" ? "SELF-LED SERIAL" : "FULL SERIAL"}
@@ -346,6 +380,7 @@ export default function App() {
             platforms={activePlatforms}
             onNavigate={goToPage}
             serialMode={serialMode}
+            serialVariant={serialVariant}
           />
         )}
         {page === "map" && (

@@ -32,3 +32,15 @@ test("manual friendlies format cardinal direction and metres", () => {
     "SOUTH 800M"
   );
 });
+
+test("observation post is available as a mapped friendly reference", () => {
+  const references = getFriendlyReferences(
+    [target],
+    target,
+    { lat: 50.995, lng: -2 }
+  );
+
+  assert.equal(references.length, 1);
+  assert.equal(references[0].id, "observation-post");
+  assert.match(references[0].value, /^OP, SOUTH \d+M$/);
+});

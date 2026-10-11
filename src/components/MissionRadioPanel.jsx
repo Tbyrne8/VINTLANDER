@@ -239,7 +239,7 @@ export default function MissionRadioPanel({
     Math.ceil((attackRunRemainingMs || 30000) / 10000) * 10
   );
   const fullNineLine = (lines || [])
-    .map(([number, label, value]) => `Line ${number}, ${label}, ${value || "unknown"}.`)
+    .map(([number, , value]) => `Line ${number}, ${value || "unknown"}.`)
     .join(" ");
   const inHotCalls = [
     { text: `${controllerCallsign}, ${callsign}, in hot. ${mark}.` },

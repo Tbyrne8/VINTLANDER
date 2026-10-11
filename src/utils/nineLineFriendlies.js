@@ -16,10 +16,26 @@ export function getFullCardinalDirection(degrees) {
   return friendlyDirections[index];
 }
 
-export function getFriendlyReferences(targets = [], attackTarget = null) {
+export function getFriendlyReferences(
+  targets = [],
+  attackTarget = null,
+  observerPosition = null
+) {
   if (!attackTarget?.position) return [];
 
-  return targets
+  const friendlies = observerPosition
+    ? [
+        ...targets,
+        {
+          id: "observation-post",
+          type: "friendly",
+          description: "OP",
+          position: observerPosition,
+        },
+      ]
+    : targets;
+
+  return friendlies
     .filter(
       (target) =>
         target.id !== attackTarget.id &&

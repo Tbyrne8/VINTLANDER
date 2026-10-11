@@ -162,6 +162,7 @@ export default function MapTrainer({
   const [mapResetKey, setMapResetKey] = useState(0);
   const [panelTab, setPanelTab] = useState("mission");
   const [showSetupPlotting, setShowSetupPlotting] = useState(false);
+  const [deconflictionDrafts, setDeconflictionDrafts] = useState({});
   const [targets, setTargets] = useState(() => loadSavedTargets(storageKeys));
   const [observerPosition, setObserverPosition] = useState(() =>
     loadSavedObserverPosition(storageKeys)
@@ -671,6 +672,7 @@ export default function MapTrainer({
   }
 
   function updatePlatformHeight(platformId, altitude) {
+    const platform = platforms.find((item) => item.id === platformId);
     setPlatforms((currentPlatforms) =>
       currentPlatforms.map((platform) =>
         platform.id === platformId
@@ -683,9 +685,37 @@ export default function MapTrainer({
     );
     recordMissionEvent({
       type: "routing",
-      title: `${platform.callsign || platform.aircraft} rerouted`,
-      detail: `${routeLabel} / ${formatMgrs(point.position)}`,
-      data: { routeLabel, position: point.position, platformId },
+      title: `${platform?.callsign || platform?.aircraft || "Aircraft"} height changed`,
+      detail: altitude,
+      data: { altitude, platformId },
+    });
+  }
+
+  function stageDeconflictionChange(platformId, field, value) {
+    setDeconflictionDrafts((current) => ({
+      ...current,
+      [platformId]: {
+        ...current[platformId],
+        [field]: value,
+      },
+    }));
+  }
+
+  function pushDeconflictionChanges(platformId) {
+    const draft = deconflictionDrafts[platformId];
+    if (!draft) return;
+
+    if (draft.routeId !== undefined) {
+      routeCheckedInPlatform(platformId, draft.routeId);
+    }
+    if (draft.altitude !== undefined) {
+      updatePlatformHeight(platformId, draft.altitude);
+    }
+
+    setDeconflictionDrafts((current) => {
+      const next = { ...current };
+      delete next[platformId];
+      return next;
     });
   }
 
@@ -736,6 +766,12 @@ export default function MapTrainer({
           : currentPlatform
       )
     );
+    recordMissionEvent({
+      type: "routing",
+      title: `${platform.callsign || platform.aircraft} rerouted`,
+      detail: `${routeLabel} / ${formatMgrs(point.position)}`,
+      data: { routeLabel, position: point.position, platformId },
+    });
   }
 
   return (
@@ -781,11 +817,11 @@ export default function MapTrainer({
         </div>
 
         <div className="pageBackRow compactBackRow">
-          {serialMode ? (
+          {serialMode && serialVariant !== "self" ? (
             <SerialWorkflowNav onNavigate={onNavigate} />
-          ) : (
+          ) : !serialMode ? (
             <button onClick={() => onNavigate("home")}>Home</button>
-          )}
+          ) : null}
         </div>
 
         <h1>Mission Panel</h1>
@@ -1129,7 +1165,11 @@ export default function MapTrainer({
             <p className="emptyText">No checked-in aircraft on station.</p>
           ) : (
             <div className="deconflictionList">
-              {platforms.map((platform) => (
+              {platforms.map((platform) => {
+                const draft = deconflictionDrafts[platform.id] || {};
+                const hasChanges = Boolean(deconflictionDrafts[platform.id]);
+
+                return (
                 <div key={platform.id} className="deconflictionRow">
                   <div>
                     <strong>{platform.callsign}</strong>
@@ -1144,9 +1184,16 @@ export default function MapTrainer({
                   <label>
                     Height
                     <select
-                      value={extractHeightBlock(platform.positionAltitude)}
+                      value={
+                        draft.altitude ??
+                        extractHeightBlock(platform.positionAltitude)
+                      }
                       onChange={(event) =>
-                        updatePlatformHeight(platform.id, event.target.value)
+                        stageDeconflictionChange(
+                          platform.id,
+                          "altitude",
+                          event.target.value
+                        )
                       }
                     >
                       {heightBlockOptions.map((altitude) => (
@@ -1160,9 +1207,15 @@ export default function MapTrainer({
                     <label>
                       Route
                       <select
-                        value={platform.routedControlPoint?.id || ""}
+                        value={
+                          draft.routeId ?? platform.routedControlPoint?.id ?? ""
+                        }
                         onChange={(event) =>
-                          routeCheckedInPlatform(platform.id, event.target.value)
+                          stageDeconflictionChange(
+                            platform.id,
+                            "routeId",
+                            event.target.value
+                          )
                         }
                       >
                         <option value="">Select</option>
@@ -1176,8 +1229,16 @@ export default function MapTrainer({
                       </select>
                     </label>
                   )}
+                  <button
+                    className="pushDeconflictionButton"
+                    disabled={!hasChanges}
+                    onClick={() => pushDeconflictionChanges(platform.id)}
+                  >
+                    Push Changes
+                  </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

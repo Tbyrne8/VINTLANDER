@@ -12,6 +12,8 @@ const savedBriefs = "vintlander.attackBriefs";
 const savedAttackStatus = "vintlander.attackStatus";
 const savedControlPoints = "vintlander.controlPoints";
 const standaloneSavedControlPoints = "vintlander.standalone.controlPoints";
+const savedObserverPosition = "vintlander.observerPosition";
+const standaloneSavedObserverPosition = "vintlander.standalone.observerPosition";
 
 function SerialWorkflowNav({ onNavigate }) {
   return (
@@ -66,6 +68,15 @@ function loadSavedList(key) {
     return saved ? JSON.parse(saved) : [];
   } catch {
     return [];
+  }
+}
+
+function loadSavedValue(key) {
+  try {
+    const saved = window.localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
   }
 }
 
@@ -126,11 +137,17 @@ export default function NineLine({
   platforms = [],
   onNavigate = () => {},
   serialMode = false,
+  serialVariant = "ds",
 }) {
   const [targets, setTargets] = useState(() => loadSavedList(savedTargets));
   const [briefs, setBriefs] = useState(() => loadSavedList(savedBriefs));
   const [controlPoints] = useState(() =>
     loadSavedList(serialMode ? savedControlPoints : standaloneSavedControlPoints)
+  );
+  const [observerPosition] = useState(() =>
+    loadSavedValue(
+      serialMode ? savedObserverPosition : standaloneSavedObserverPosition
+    )
   );
   const [selectedPlatformId, setSelectedPlatformId] = useState("");
   const [selectedTargetId, setSelectedTargetId] = useState("");
@@ -241,11 +258,11 @@ export default function NineLine({
   return (
     <main className="page nineLinePage">
       <div className="pageBackRow">
-        {serialMode ? (
+        {serialMode && serialVariant !== "self" ? (
           <SerialWorkflowNav onNavigate={onNavigate} />
-        ) : (
+        ) : !serialMode ? (
           <button onClick={() => onNavigate("home")}>Home</button>
-        )}
+        ) : null}
       </div>
 
       <header className="pageHeader">
@@ -366,6 +383,7 @@ export default function NineLine({
             brief={brief}
             targets={targets}
             attackTarget={selectedTarget}
+            observerPosition={observerPosition}
             updateBrief={updateBrief}
           />
 
