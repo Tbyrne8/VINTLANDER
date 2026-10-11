@@ -146,6 +146,7 @@ export default function MapTrainer({
   setPlatforms,
   onNavigate = () => {},
   serialMode = false,
+  serialVariant = "ds",
 }) {
   const storageKeys = useMemo(() => getMapStorageKeys(serialMode), [serialMode]);
   const [mgrsInput, setMgrsInput] = useState("");
@@ -158,6 +159,7 @@ export default function MapTrainer({
   const [zoom, setZoom] = useState(13);
   const [mapResetKey, setMapResetKey] = useState(0);
   const [panelTab, setPanelTab] = useState("mission");
+  const [showSetupPlotting, setShowSetupPlotting] = useState(false);
   const [targets, setTargets] = useState(() => loadSavedTargets(storageKeys));
   const [observerPosition, setObserverPosition] = useState(() =>
     loadSavedObserverPosition(storageKeys)
@@ -168,6 +170,7 @@ export default function MapTrainer({
   const [controlPointType, setControlPointType] = useState("ip");
   const [controlPointName, setControlPointName] = useState("");
   const [controlPointGrid, setControlPointGrid] = useState("");
+  const [echoPointGrid, setEchoPointGrid] = useState("");
   const [artillery, setArtillery] = useState(() => loadSavedArtillery(storageKeys));
   const [artilleryName, setArtilleryName] = useState("");
   const [artilleryGrid, setArtilleryGrid] = useState("");
@@ -183,6 +186,8 @@ export default function MapTrainer({
   const [stagedCheckIn, setStagedCheckIn] = useState(() =>
     serialMode ? loadStagedCheckIn() : null
   );
+  const isSelfLedMapSetup =
+    serialMode && serialVariant === "self" && Boolean(stagedCheckIn);
   const [mapReadyControlPointId, setMapReadyControlPointId] = useState("");
   const [missionAnchor, setMissionAnchor] = useState(position);
   const [airPictureTick, setAirPictureTick] = useState(0);
@@ -501,6 +506,34 @@ export default function MapTrainer({
     );
   }
 
+  function saveEchoPointAtPosition(echoPosition) {
+    const echoPoint = {
+      id: `ECHO-${Date.now()}`,
+      type: "echo",
+      name: "ECHO POINT",
+      position: echoPosition,
+      mgrs: mgrs.forward([echoPosition.lng, echoPosition.lat]),
+      createdAt: new Date().toLocaleTimeString(),
+      source: "SELF-LED MAP SETUP",
+    };
+    setControlPoints((current) => [
+      ...current.filter((point) => point.type !== "echo"),
+      echoPoint,
+    ]);
+    setEchoPointGrid("");
+  }
+
+  function saveEchoPointAtGrid() {
+    try {
+      const echoPosition = parseMgrs(echoPointGrid);
+      saveEchoPointAtPosition(echoPosition);
+      setPosition(echoPosition);
+      setMapResetKey((current) => current + 1);
+    } catch {
+      alert("Invalid Echo point MGRS grid.");
+    }
+  }
+
   function saveArtilleryAtPosition(gunPosition) {
     const item = {
       id: `ARTY-${Date.now()}`,
@@ -706,8 +739,28 @@ export default function MapTrainer({
   }
 
   return (
-    <main className="mapPage">
+    <main className={`mapPage ${isSelfLedMapSetup ? "selfLedSetupMap" : ""}`}>
       <section className="mapControls">
+        {isSelfLedMapSetup ? (
+          <div className="selfLedMapSetupPanel">
+            <span className="statusPill">TACTICAL MAP SETUP</span>
+            <h1>Review Your Ground Picture</h1>
+            <p>
+              Check the plotted OP, target and IP/BP positions. Move the map to
+              inspect them before starting the scenario.
+            </p>
+            <button
+              className="addSetupPointsButton"
+              onClick={() => setShowSetupPlotting((current) => !current)}
+            >
+              {showSetupPlotting ? "Finish Plotting Positions" : "Plot More Positions"}
+            </button>
+            <button className="tacticalStartButton" onClick={confirmMapReady}>
+              START SCENARIO
+            </button>
+          </div>
+        ) : (
+          <>
         <div className="pageBackRow compactBackRow">
           {serialMode ? (
             <SerialWorkflowNav onNavigate={onNavigate} />
@@ -752,8 +805,10 @@ export default function MapTrainer({
           mapResetKey={mapResetKey}
           setMapResetKey={setMapResetKey}
         />
+          </>
+        )}
 
-        {panelTab === "mission" && (
+        {!isSelfLedMapSetup && panelTab === "mission" && (
           <>
         {serialMode && stagedCheckIn && (
           <div className="serialCard routeCard">
@@ -853,13 +908,14 @@ export default function MapTrainer({
           </>
         )}
 
-        {panelTab === "plotting" && (
+        {((!isSelfLedMapSetup && panelTab === "plotting") ||
+          (isSelfLedMapSetup && showSetupPlotting)) && (
           <div className="plottingTabPanel">
             <p className="plottingHint">
               Move the map beneath the crosshair or enter an MGRS grid for the
               item you want to plot.
             </p>
-        <ObserverPanel
+        {!isSelfLedMapSetup && <ObserverPanel
           observerPosition={observerPosition}
           setObserverPosition={setObserverPosition}
           position={position}
@@ -867,7 +923,7 @@ export default function MapTrainer({
           setMapResetKey={setMapResetKey}
           showObserverLine={showObserverLine}
           setShowObserverLine={setShowObserverLine}
-        />
+        />}
 
         <div className="controlPointPanel">
           <h2>IP / BP MARKERS</h2>
@@ -975,10 +1031,12 @@ export default function MapTrainer({
               : "Show Off-Map IP/BP"}
           </button>
 
-          {controlPoints.length === 0 ? (
+          {controlPoints.filter((point) => point.type === "ip" || point.type === "bp").length === 0 ? (
             <p className="emptyText">No IP/BP markers saved yet.</p>
           ) : (
-            controlPoints.map((point) => (
+            controlPoints
+              .filter((point) => point.type === "ip" || point.type === "bp")
+              .map((point) => (
               <div key={point.id} className="dataRow">
                 <span>{point.name}</span>
                 <strong>{point.type.toUpperCase()}</strong>
@@ -994,7 +1052,7 @@ export default function MapTrainer({
           )}
         </div>
 
-        <div className="controlPointPanel">
+        {!isSelfLedMapSetup && <div className="controlPointPanel">
           <h2>ARTILLERY / GUN-TARGET LINES</h2>
           <p>Plot a reported gun grid to support airspace deconfliction.</p>
           <label className="field">
@@ -1027,7 +1085,26 @@ export default function MapTrainer({
               </button>
             </div>
           ))}
-        </div>
+        </div>}
+
+        {isSelfLedMapSetup && (
+          <div className="controlPointPanel echoPointPanel">
+            <h2>ECHO POINT</h2>
+            <p>Set the centre point used for Alpha, Bravo, Charlie and Delta egress.</p>
+            <button onClick={() => saveEchoPointAtPosition(position)}>
+              Set Echo Point At Crosshair
+            </button>
+            <label className="field">
+              Echo point MGRS
+              <input
+                value={echoPointGrid}
+                onChange={(event) => setEchoPointGrid(event.target.value.toUpperCase())}
+                placeholder="Example: 30U WB 68569 74674"
+              />
+            </label>
+            <button onClick={saveEchoPointAtGrid}>Set Echo Point From Grid</button>
+          </div>
+        )}
 
         <TargetRegister
           targets={targets}
@@ -1035,11 +1112,13 @@ export default function MapTrainer({
           position={position}
           setPosition={setPosition}
           setMapResetKey={setMapResetKey}
+          allowedTargetTypes={isSelfLedMapSetup ? ["friendly"] : undefined}
+          title={isSelfLedMapSetup ? "FRIENDLY POSITIONS" : undefined}
         />
           </div>
         )}
 
-        {panelTab === "mission" && (
+        {!isSelfLedMapSetup && panelTab === "mission" && (
           <>
         <TrainingNotes />
 
@@ -1348,9 +1427,14 @@ function getControlPointRoleForAircraft(aircraft = "") {
 
 function getRouteableControlPoints(controlPoints, aircraft = "") {
   const preferredType = getControlPointRoleForAircraft(aircraft);
-  const preferredPoints = controlPoints.filter((point) => point.type === preferredType);
+  const routeablePoints = controlPoints.filter(
+    (point) => point.type === "ip" || point.type === "bp"
+  );
+  const preferredPoints = routeablePoints.filter(
+    (point) => point.type === preferredType
+  );
 
-  return preferredPoints.length > 0 ? preferredPoints : controlPoints;
+  return preferredPoints.length > 0 ? preferredPoints : routeablePoints;
 }
 
 function getRouteTransitDurationMs(pendingCheckIn) {

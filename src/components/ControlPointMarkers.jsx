@@ -14,6 +14,12 @@ const controlPointStyle = {
     sizeMetres: 2000,
     fillOpacity: 0.14,
   },
+  echo: {
+    label: "ECHO",
+    colour: "#f5c542",
+    sizeMetres: 400,
+    fillOpacity: 0.12,
+  },
 };
 
 function makeControlPointIcon(point) {

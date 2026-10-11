@@ -30,6 +30,10 @@ export default function NineLineEgressField({
     () => availablePoints.map(formatNineLineControlPoint),
     [availablePoints]
   );
+  const mappedEchoGrid = useMemo(
+    () => controlPoints.find((point) => point.type === "echo")?.mgrs || "",
+    [controlPoints]
+  );
 
   const updateEgress = useCallback((base) => {
     updateBrief("egressBase", base);
@@ -52,6 +56,26 @@ export default function NineLineEgressField({
     updateEgress(base);
   }, [availableLabels, brief.egress, brief.egressBase, mode, updateEgress]);
 
+  useEffect(() => {
+    if (mode !== "echo" || brief.echoPointGrid || !mappedEchoGrid) return;
+    updateBrief("echoPointGrid", mappedEchoGrid);
+    updateEgress(
+      formatEchoEgress(
+        mappedEchoGrid,
+        brief.echoSector || "ALPHA",
+        brief.echoDistanceNm || "5"
+      )
+    );
+  }, [
+    brief.echoDistanceNm,
+    brief.echoPointGrid,
+    brief.echoSector,
+    mappedEchoGrid,
+    mode,
+    updateBrief,
+    updateEgress,
+  ]);
+
   function setMode(nextMode) {
     updateBrief("egressMode", nextMode);
 
@@ -65,9 +89,11 @@ export default function NineLineEgressField({
         )
       );
     } else {
+      const echoGrid = brief.echoPointGrid || mappedEchoGrid;
+      if (!brief.echoPointGrid && echoGrid) updateBrief("echoPointGrid", echoGrid);
       updateEgress(
         formatEchoEgress(
-          brief.echoPointGrid || "",
+          echoGrid,
           brief.echoSector || "ALPHA",
           brief.echoDistanceNm || "5"
         )

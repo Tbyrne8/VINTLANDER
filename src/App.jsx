@@ -268,6 +268,12 @@ export default function App() {
     setStandalonePlatforms([]);
   }
 
+  const isSelfLedMapSetup =
+    serialMode &&
+    serialVariant === "self" &&
+    page === "map" &&
+    Boolean(window.localStorage.getItem("vintlander.stagedCheckIn"));
+
   return (
     <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
       <div className={`app ${serialMode ? "serialMode" : ""}`}>
@@ -290,7 +296,7 @@ export default function App() {
           </nav>
         )}
 
-        {serialMode && page !== "tacp" && (
+        {serialMode && page !== "tacp" && !isSelfLedMapSetup && (
           <div className="serialBar">
             <strong>
               {serialVariant === "self" ? "SELF-LED SERIAL" : "FULL SERIAL"}
@@ -342,6 +348,7 @@ export default function App() {
             setPlatforms={setActivePlatforms}
             onNavigate={goToPage}
             serialMode={serialMode}
+            serialVariant={serialVariant}
           />
         )}
         {page === "checkin" && (

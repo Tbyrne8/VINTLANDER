@@ -10,15 +10,20 @@ export default function TargetRegister({
   position,
   setPosition,
   setMapResetKey,
+  allowedTargetTypes = ["enemy", "friendly", "neutral", "unknown", "objective"],
+  title = "TARGET REGISTER",
 }) {
   const [description, setDescription] = useState("");
-  const [targetType, setTargetType] = useState("enemy");
+  const [targetType, setTargetType] = useState(allowedTargetTypes[0] || "enemy");
   const [friendlyUnitType, setFriendlyUnitType] = useState("infantry");
   const [enemyUnitType, setEnemyUnitType] = useState("infantry");
   const [targetGrid, setTargetGrid] = useState("");
 
   const nextTargetNumber = targets.length + 1;
   const nextTargetId = `TGT-${String(nextTargetNumber).padStart(3, "0")}`;
+  const visibleTargets = targets.filter((target) =>
+    allowedTargetTypes.includes(target.type)
+  );
 
   function saveTargetAtPosition(targetPosition) {
     if (!description.trim()) {
@@ -39,7 +44,7 @@ export default function TargetRegister({
 
     setTargets([...targets, newTarget]);
     setDescription("");
-    setTargetType("enemy");
+    setTargetType(allowedTargetTypes[0] || "enemy");
     return true;
   }
 
@@ -62,7 +67,7 @@ export default function TargetRegister({
 
   return (
     <div className="targetRegister">
-      <h2>TARGET REGISTER</h2>
+      <h2>{title}</h2>
 
       <input
         value={description}
@@ -70,13 +75,15 @@ export default function TargetRegister({
         placeholder="Target description"
       />
 
-      <select value={targetType} onChange={(e) => setTargetType(e.target.value)}>
-        <option value="enemy">Enemy</option>
-        <option value="friendly">Friendly</option>
-        <option value="neutral">Neutral</option>
-        <option value="unknown">Unknown</option>
-        <option value="objective">Objective</option>
-      </select>
+      {allowedTargetTypes.length > 1 && (
+        <select value={targetType} onChange={(e) => setTargetType(e.target.value)}>
+          {allowedTargetTypes.includes("enemy") && <option value="enemy">Enemy</option>}
+          {allowedTargetTypes.includes("friendly") && <option value="friendly">Friendly</option>}
+          {allowedTargetTypes.includes("neutral") && <option value="neutral">Neutral</option>}
+          {allowedTargetTypes.includes("unknown") && <option value="unknown">Unknown</option>}
+          {allowedTargetTypes.includes("objective") && <option value="objective">Objective</option>}
+        </select>
+      )}
 
       {targetType === "friendly" && (
         <label className="field">
@@ -124,9 +131,11 @@ export default function TargetRegister({
       </label>
       <button onClick={saveTargetAtGrid}>Plot Target From Grid</button>
 
-      {targets.length === 0 && <p className="emptyText">No saved targets yet.</p>}
+      {visibleTargets.length === 0 && (
+        <p className="emptyText">No saved positions of this type yet.</p>
+      )}
 
-      {targets.map((target) => (
+      {visibleTargets.map((target) => (
         <div key={target.id} className={`targetItem ${target.type}`}>
           <button onClick={() => goToTarget(target)}>
             <strong>{target.id}</strong>

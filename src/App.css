@@ -70,6 +70,12 @@ textarea {
   height: calc(100vh - 54px);
 }
 
+.serialMode .mapPage.selfLedSetupMap,
+.serialMode .selfLedSetupMap .mapControls,
+.serialMode .selfLedSetupMap .mapBox {
+  height: 100vh;
+}
+
 .headerActions {
   display: flex;
   align-items: center;
@@ -367,6 +373,45 @@ select {
   background: #202b20;
   color: #d6dec2;
   line-height: 1.4;
+}
+
+.selfLedMapSetupPanel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 2px solid #f5c542;
+  border-radius: 12px;
+  background: #202b20;
+}
+
+.selfLedMapSetupPanel h1,
+.selfLedMapSetupPanel p {
+  margin: 0;
+}
+
+.selfLedMapSetupPanel p {
+  color: #d6dec2;
+  line-height: 1.45;
+}
+
+.addSetupPointsButton {
+  min-height: 48px;
+}
+
+.tacticalStartButton {
+  min-height: 76px;
+  border: 3px solid #f5c542;
+  border-radius: 10px;
+  background: #526c2f;
+  color: #ffffff;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  box-shadow: 0 0 18px rgba(245, 197, 66, 0.28);
+}
+
+.tacticalStartButton:hover {
+  background: #66863a;
 }
 
 .mapBox {
