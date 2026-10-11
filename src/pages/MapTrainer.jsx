@@ -279,12 +279,13 @@ export default function MapTrainer({
 
   useEffect(() => {
     if (!stagedCheckIn || mapReadyControlPointId) return;
-    const firstSuitablePoint = getRouteableControlPoints(
-      controlPoints,
-      stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId
-    )[0];
+    const aircraft = stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId;
+    const firstSuitablePoint =
+      isSelfLedMapSetup && isRotaryWingAircraft(aircraft)
+        ? controlPoints.find((point) => point.type === "ha")
+        : getRouteableControlPoints(controlPoints, aircraft)[0];
     if (firstSuitablePoint) setMapReadyControlPointId(firstSuitablePoint.id);
-  }, [controlPoints, mapReadyControlPointId, stagedCheckIn]);
+  }, [controlPoints, isSelfLedMapSetup, mapReadyControlPointId, stagedCheckIn]);
 
   useEffect(() => {
     if (!serialMode) return undefined;
@@ -496,7 +497,7 @@ export default function MapTrainer({
       saveControlPointAtPosition(parseMgrs(controlPointGrid));
       setControlPointGrid("");
     } catch {
-      alert("Invalid IP/BP MGRS grid.");
+      alert("Invalid IP/BP/HA MGRS grid.");
     }
   }
 
@@ -574,7 +575,7 @@ export default function MapTrainer({
     if (!stagedCheckIn) return;
     const point = controlPoints.find((item) => item.id === mapReadyControlPointId);
     if (!point) {
-      alert("Add and select a suitable IP/BP before confirming the map.");
+      alert("Add and select a suitable IP or HA before confirming the map.");
       return;
     }
     const routeLabel = formatControlPointLabel(point);
@@ -818,12 +819,12 @@ export default function MapTrainer({
               positions before pushing {stagedCheckIn.aircraftLabel}.
             </p>
             <label className="field">
-              Initial aircraft IP/BP
+              Initial aircraft holding point
               <select
                 value={mapReadyControlPointId}
                 onChange={(event) => setMapReadyControlPointId(event.target.value)}
               >
-                <option value="">Select IP/BP</option>
+                <option value="">Select IP/HA</option>
                 {getRouteableControlPoints(
                   controlPoints,
                   stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId
@@ -885,7 +886,7 @@ export default function MapTrainer({
                       routeCheckedInPlatform(platform.id, event.target.value)
                     }
                   >
-                    <option value="">Select IP/BP</option>
+                    <option value="">Select IP/HA</option>
                     {getRouteableControlPoints(controlPoints, platform.aircraft).map(
                       (point) => (
                         <option key={point.id} value={point.id}>
@@ -926,7 +927,7 @@ export default function MapTrainer({
         />}
 
         <div className="controlPointPanel">
-          <h2>IP / BP MARKERS</h2>
+          <h2>IP / BP / HA MARKERS</h2>
           <div className="grid compactGrid">
             <label>
               Type
@@ -936,6 +937,7 @@ export default function MapTrainer({
               >
                 <option value="ip">IP</option>
                 <option value="bp">BP</option>
+                <option value="ha">HA</option>
               </select>
             </label>
 
@@ -949,7 +951,7 @@ export default function MapTrainer({
             </label>
           </div>
 
-          <button onClick={saveControlPoint}>Save IP/BP At Crosshair</button>
+          <button onClick={saveControlPoint}>Save Point At Crosshair</button>
 
           <label className="field">
             Centre MGRS
@@ -962,7 +964,7 @@ export default function MapTrainer({
             />
           </label>
 
-          <button onClick={saveControlPointAtGrid}>Save IP/BP At Grid</button>
+          <button onClick={saveControlPointAtGrid}>Save Point At Grid</button>
 
           {serialMode && pendingCheckIn && (
             <div className="serialCard routeCard">
@@ -973,7 +975,7 @@ export default function MapTrainer({
               </p>
 
               {controlPoints.length === 0 ? (
-                <p className="emptyText">Add or receive an IP/BP before routing.</p>
+                <p className="emptyText">Add or receive an IP/HA before routing.</p>
               ) : (
                 <>
                 <label className="routeHeightControl">
@@ -1031,11 +1033,11 @@ export default function MapTrainer({
               : "Show Off-Map IP/BP"}
           </button>
 
-          {controlPoints.filter((point) => point.type === "ip" || point.type === "bp").length === 0 ? (
-            <p className="emptyText">No IP/BP markers saved yet.</p>
+          {controlPoints.filter((point) => ["ip", "bp", "ha"].includes(point.type)).length === 0 ? (
+            <p className="emptyText">No IP/BP/HA markers saved yet.</p>
           ) : (
             controlPoints
-              .filter((point) => point.type === "ip" || point.type === "bp")
+              .filter((point) => ["ip", "bp", "ha"].includes(point.type))
               .map((point) => (
               <div key={point.id} className="dataRow">
                 <span>{point.name}</span>
@@ -1134,7 +1136,7 @@ export default function MapTrainer({
                     <strong>{platform.callsign}</strong>
                     <span>{platform.aircraft}</span>
                     <small>
-                      {platform.routedControlPoint?.label || "NO IP/BP"} /{" "}
+                      {platform.routedControlPoint?.label || "NO IP/HA"} /{" "}
                       {platform.routePosition
                         ? formatMgrs(platform.routePosition)
                         : "GRID NOT SET"}
@@ -1350,7 +1352,7 @@ function getInboundPlatformTrack(platform, tick) {
     callsign: platform.callsign,
     aircraft: platform.aircraft,
     altitude: formatSpeedLabel(platform.aircraft),
-    mode: `Routing to ${platform.routedControlPoint?.label || "IP/BP"}`,
+    mode: `Routing to ${platform.routedControlPoint?.label || "IP/HA"}`,
     routePhase: "inbound",
   };
 }
@@ -1380,7 +1382,7 @@ function getPendingPlatformTrack(pendingCheckIn, tick) {
       aircraft,
       position,
       altitude: formatSpeedLabel(aircraft),
-      mode: `Routing to ${pendingCheckIn.routedControlPoint?.label || "IP/BP"}`,
+      mode: `Routing to ${pendingCheckIn.routedControlPoint?.label || "IP/HA"}`,
       routePhase: "inbound",
     };
   }
@@ -1419,7 +1421,7 @@ function isUavAircraft(aircraft = "") {
 
 function getControlPointRoleForAircraft(aircraft = "") {
   if (isRotaryWingAircraft(aircraft)) {
-    return "bp";
+    return "ha";
   }
 
   return "ip";
@@ -1428,13 +1430,18 @@ function getControlPointRoleForAircraft(aircraft = "") {
 function getRouteableControlPoints(controlPoints, aircraft = "") {
   const preferredType = getControlPointRoleForAircraft(aircraft);
   const routeablePoints = controlPoints.filter(
-    (point) => point.type === "ip" || point.type === "bp"
+    (point) => point.type === "ip" || point.type === "ha"
   );
   const preferredPoints = routeablePoints.filter(
     (point) => point.type === preferredType
   );
+  const legacyBattlePositions = controlPoints.filter(
+    (point) => point.type === "bp"
+  );
 
-  return preferredPoints.length > 0 ? preferredPoints : routeablePoints;
+  if (preferredPoints.length > 0) return preferredPoints;
+  if (isRotaryWingAircraft(aircraft)) return legacyBattlePositions;
+  return routeablePoints;
 }
 
 function getRouteTransitDurationMs(pendingCheckIn) {

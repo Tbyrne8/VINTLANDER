@@ -49,4 +49,25 @@ export function findSafeTargetPosition(
   return bestCandidate;
 }
 
+export function getReciprocalBattlePosition(
+  opPosition,
+  enemyPosition,
+  distanceMetres = 5000
+) {
+  const metresPerDegreeLat = 111320;
+  const metresPerDegreeLng =
+    111320 * Math.cos((opPosition.lat * Math.PI) / 180);
+  const enemyEastMetres =
+    (enemyPosition.lng - opPosition.lng) * metresPerDegreeLng;
+  const enemyNorthMetres =
+    (enemyPosition.lat - opPosition.lat) * metresPerDegreeLat;
+  const enemyDistance = Math.hypot(enemyEastMetres, enemyNorthMetres) || 1;
+
+  return offsetPosition(
+    opPosition,
+    (-enemyEastMetres / enemyDistance) * distanceMetres,
+    (-enemyNorthMetres / enemyDistance) * distanceMetres
+  );
+}
+
 export { minimumControlPointSeparationMetres };

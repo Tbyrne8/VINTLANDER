@@ -862,7 +862,7 @@ export default function CheckIn({
                   <p>
                     Route:{" "}
                     {pendingCheckIn.routeStatus ||
-                      "Route aircraft to an IP/BP before check-in."}
+                      "Route aircraft to an IP or HA before check-in."}
                   </p>
                   {!pendingCheckIn.routedControlPoint && (
                     <button onClick={() => setRoutePickerOpen(true)}>
@@ -1120,7 +1120,7 @@ export default function CheckIn({
                           <strong>{platform.callsign}</strong>
                           <span>{platform.aircraft}</span>
                           <small>
-                            {platform.routedControlPoint?.label || "NO IP/BP"} /{" "}
+                            {platform.routedControlPoint?.label || "NO IP/HA"} /{" "}
                             {platform.routePosition
                               ? formatMgrs(platform.routePosition)
                               : "GRID NOT SET"}
@@ -1422,7 +1422,7 @@ function replaceAltitude(positionAltitude = "", altitude) {
 
 function getControlPointRoleForAircraft(aircraft = "") {
   if (isRotaryWingAircraft(aircraft)) {
-    return "bp";
+    return "ha";
   }
 
   return "ip";
@@ -1430,9 +1430,19 @@ function getControlPointRoleForAircraft(aircraft = "") {
 
 function getRouteableControlPoints(controlPoints, aircraft = "") {
   const preferredType = getControlPointRoleForAircraft(aircraft);
-  const preferredPoints = controlPoints.filter((point) => point.type === preferredType);
+  const routeablePoints = controlPoints.filter(
+    (point) => point.type === "ip" || point.type === "ha"
+  );
+  const preferredPoints = routeablePoints.filter(
+    (point) => point.type === preferredType
+  );
+  const legacyBattlePositions = controlPoints.filter(
+    (point) => point.type === "bp"
+  );
 
-  return preferredPoints.length > 0 ? preferredPoints : controlPoints;
+  if (preferredPoints.length > 0) return preferredPoints;
+  if (isRotaryWingAircraft(aircraft)) return legacyBattlePositions;
+  return routeablePoints;
 }
 
 function offsetPosition(center, eastMetres, northMetres) {

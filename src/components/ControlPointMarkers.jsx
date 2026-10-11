@@ -20,6 +20,12 @@ const controlPointStyle = {
     sizeMetres: 400,
     fillOpacity: 0.12,
   },
+  ha: {
+    label: "HA",
+    colour: "#7ee0a1",
+    sizeMetres: 3000,
+    fillOpacity: 0.1,
+  },
 };
 
 function makeControlPointIcon(point) {

@@ -27,7 +27,10 @@ import {
   recordMissionEvent,
 } from "../utils/missionEvents.js";
 import { getScenarioPreset, scenarioPresets } from "../utils/scenarioPresets.js";
-import { findSafeTargetPosition } from "../utils/targetPlacement.js";
+import {
+  findSafeTargetPosition,
+  getReciprocalBattlePosition,
+} from "../utils/targetPlacement.js";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -453,7 +456,7 @@ function isUavAircraft(aircraft = "") {
 
 function getControlPointRoleForAircraft(aircraft = "") {
   if (isRotaryWingAircraft(aircraft)) {
-    return "bp";
+    return "ha";
   }
 
   return "ip";
@@ -461,9 +464,19 @@ function getControlPointRoleForAircraft(aircraft = "") {
 
 function getRouteableControlPoints(controlPoints, aircraft = "") {
   const preferredType = getControlPointRoleForAircraft(aircraft);
-  const preferredPoints = controlPoints.filter((point) => point.type === preferredType);
+  const routeablePoints = controlPoints.filter(
+    (point) => point.type === "ip" || point.type === "ha"
+  );
+  const preferredPoints = routeablePoints.filter(
+    (point) => point.type === preferredType
+  );
+  const legacyBattlePositions = controlPoints.filter(
+    (point) => point.type === "bp"
+  );
 
-  return preferredPoints.length > 0 ? preferredPoints : controlPoints;
+  if (preferredPoints.length > 0) return preferredPoints;
+  if (isRotaryWingAircraft(aircraft)) return legacyBattlePositions;
+  return routeablePoints;
 }
 
 function offsetPosition(center, eastMetres, northMetres) {
@@ -1317,7 +1330,7 @@ export default function TacpTraining({
           ?.label || "Generated text",
       manualScenario,
       pushedAt: getTimestamp(),
-      route: "Awaiting troop route to an IP/BP before check-in.",
+      route: "Awaiting troop route to an IP or HA before check-in.",
       routeStatus: "AWAITING TROOP ROUTE",
       routedControlPoint: null,
       extraPlaytimeMinutes: 0,
@@ -1332,7 +1345,7 @@ export default function TacpTraining({
   function startSelfLedGeneratedSerial(scenario = null) {
     try {
       const opPosition = parseMgrs(scenario?.opGrid || selfSetup.opGrid);
-      const setupControlPoints = scenario
+      const initialControlPoints = scenario
         ? buildScenarioControlPoints(scenario, "Self-led scenario preset")
         : selfSetupControlPoints.length > 0
           ? selfSetupControlPoints
@@ -1340,8 +1353,46 @@ export default function TacpTraining({
       const selfLedTarget = createSelfLedTarget(
         opPosition,
         targets,
-        setupControlPoints
+        initialControlPoints
       );
+      const reciprocalBpPosition = getReciprocalBattlePosition(
+        opPosition,
+        selfLedTarget.position
+      );
+      const reciprocalBp = {
+        id: `BP-SAFE-${Date.now()}`,
+        type: "bp",
+        name: "SAFE",
+        position: reciprocalBpPosition,
+        mgrs: mgrs.forward([
+          reciprocalBpPosition.lng,
+          reciprocalBpPosition.lat,
+        ]),
+        createdAt: getTimestamp(),
+        source: "Self-led reciprocal BP",
+      };
+      const reciprocalHaPosition = getReciprocalBattlePosition(
+        opPosition,
+        selfLedTarget.position,
+        10000
+      );
+      const reciprocalHa = {
+        id: `HA-SAFE-${Date.now()}`,
+        type: "ha",
+        name: "SAFE",
+        position: reciprocalHaPosition,
+        mgrs: mgrs.forward([
+          reciprocalHaPosition.lng,
+          reciprocalHaPosition.lat,
+        ]),
+        createdAt: getTimestamp(),
+        source: "Self-led reciprocal HA",
+      };
+      const setupControlPoints = [
+        ...initialControlPoints,
+        reciprocalBp,
+        reciprocalHa,
+      ];
       const updatedTargets = [...targets, selfLedTarget];
       const availableAircraft = getAircraftOptions();
       const resolvedAircraft =
@@ -1365,8 +1416,12 @@ export default function TacpTraining({
           )?.label || "Generated radio voice",
         manualScenario: null,
         pushedAt: getTimestamp(),
-        route: "Aircraft awaiting signaller route to the correct IP/BP.",
-        routeStatus: `REQUESTING ROUTE TO ${getControlPointRoleForAircraft(aircraftLabel).toUpperCase()}`,
+        route: isRotaryWingAircraft(aircraftLabel)
+          ? "Aircraft awaiting route to a holding area before being pushed to a BP."
+          : "Aircraft awaiting signaller route to the correct IP.",
+        routeStatus: isRotaryWingAircraft(aircraftLabel)
+          ? "REQUESTING ROUTE TO HA"
+          : "REQUESTING ROUTE TO IP",
         clearanceRequested: true,
         routedControlPoint: null,
         routePosition: null,
@@ -2980,7 +3035,7 @@ export default function TacpTraining({
                         <strong>{platform.callsign}</strong>
                         <span>{platform.aircraft}</span>
                         <small>
-                          {platform.routedControlPoint?.label || "NO IP/BP"} /{" "}
+                          {platform.routedControlPoint?.label || "NO IP/HA"} /{" "}
                           {platform.routePosition
                             ? formatMgrs(platform.routePosition)
                             : "GRID NOT SET"}
