@@ -872,6 +872,35 @@ select {
   font-size: 12px;
 }
 
+.incomingAircraftSummary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.incomingAircraftSummary > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #3f563f;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.incomingAircraftSummary span {
+  color: #9cab9c;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.incomingAircraftSummary strong {
+  color: #ffffff;
+  font-size: 18px;
+}
+
 .secondaryAction {
   margin-top: 12px;
 }
@@ -2221,6 +2250,14 @@ select {
   font-family: "Roboto Mono", monospace;
   font-size: 0.75rem;
   text-align: right;
+}
+
+.attackOnlyPage .serialAttackGrid {
+  grid-template-columns: minmax(320px, 0.75fr) minmax(0, 1.6fr);
+}
+
+.attackOnlyPage .attackRunMap {
+  height: min(620px, 68vh);
 }
 
 .vdlImpactFlash {

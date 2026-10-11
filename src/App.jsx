@@ -333,6 +333,12 @@ export default function App() {
             >
               Build 9-Line
             </button>
+            <button
+              className={page === "attack" ? "active" : ""}
+              onClick={() => goToPage("attack")}
+            >
+              Attack
+            </button>
           </nav>
         )}
 
@@ -399,6 +405,18 @@ export default function App() {
             onNavigate={goToPage}
             serialMode={serialMode}
             serialVariant={serialVariant}
+          />
+        )}
+        {page === "attack" && (
+          <TacpTraining
+            platforms={activePlatforms}
+            setPlatforms={setActivePlatforms}
+            onNavigate={goToPage}
+            serialMode={serialMode}
+            serialVariant={serialVariant}
+            onExitSerial={exitSerial}
+            linkedRole={linkedSession?.role || null}
+            attackOnly
           />
         )}
       </div>

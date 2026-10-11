@@ -190,6 +190,9 @@ export default function MapTrainer({
   const [stagedCheckIn, setStagedCheckIn] = useState(() =>
     serialMode ? loadStagedCheckIn() : null
   );
+  const [routeRequestOpen, setRouteRequestOpen] = useState(() =>
+    Boolean(serialMode && loadStagedCheckIn())
+  );
   const isSelfLedMapSetup =
     serialMode && serialVariant === "self" && Boolean(stagedCheckIn);
   const [mapReadyControlPointId, setMapReadyControlPointId] = useState("");
@@ -300,6 +303,10 @@ export default function MapTrainer({
         : getRouteableControlPoints(controlPoints, aircraft)[0];
     if (firstSuitablePoint) setMapReadyControlPointId(firstSuitablePoint.id);
   }, [controlPoints, isSelfLedMapSetup, mapReadyControlPointId, stagedCheckIn]);
+
+  useEffect(() => {
+    if (stagedCheckIn) setRouteRequestOpen(true);
+  }, [stagedCheckIn]);
 
   useEffect(() => {
     if (!serialMode) return undefined;
@@ -582,9 +589,13 @@ export default function MapTrainer({
     setArtillery((current) => current.filter((item) => item.id !== itemId));
   }
 
-  function confirmMapReady() {
+  function confirmMapReady(selectedPointId = mapReadyControlPointId) {
     if (!stagedCheckIn) return;
-    const point = controlPoints.find((item) => item.id === mapReadyControlPointId);
+    const pointId =
+      typeof selectedPointId === "string"
+        ? selectedPointId
+        : mapReadyControlPointId;
+    const point = controlPoints.find((item) => item.id === pointId);
     if (!point) {
       alert("Add and select a suitable IP or HA before confirming the map.");
       return;
@@ -619,7 +630,15 @@ export default function MapTrainer({
     window.localStorage.removeItem(savedStagedCheckIn);
     setPendingCheckIn(tasking);
     setStagedCheckIn(null);
+    setRouteRequestOpen(false);
     onNavigate("checkin");
+  }
+
+  function updateStagedRouteAltitude(altitude) {
+    if (!stagedCheckIn) return;
+    const updatedTasking = { ...stagedCheckIn, routeAltitude: altitude };
+    window.localStorage.setItem(savedStagedCheckIn, JSON.stringify(updatedTasking));
+    setStagedCheckIn(updatedTasking);
   }
 
   function routePendingAircraft(point) {
@@ -809,7 +828,10 @@ export default function MapTrainer({
             >
               {showSetupPlotting ? "Finish Plotting Positions" : "Plot More Positions"}
             </button>
-            <button className="tacticalStartButton" onClick={confirmMapReady}>
+            <button
+              className="tacticalStartButton"
+              onClick={() => setRouteRequestOpen(true)}
+            >
               START SCENARIO
             </button>
           </div>
@@ -888,7 +910,9 @@ export default function MapTrainer({
                 ))}
               </select>
             </label>
-            <button onClick={confirmMapReady}>Map Ready — Push Aircraft To Check-In</button>
+            <button onClick={() => confirmMapReady()}>
+              Map Ready — Push Aircraft To Check-In
+            </button>
           </div>
         )}
 
@@ -1372,6 +1396,97 @@ export default function MapTrainer({
           attackBrief={linkedAttackBrief}
         />
       </section>
+
+      {serialMode && stagedCheckIn && routeRequestOpen && (
+        <div className="tacticalPopupOverlay">
+          <div className="tacticalPopup aircraftCheckInPopup">
+            <div className="popupHeader">
+              <div>
+                <small>Incoming aircraft — check-in request</small>
+                <h2>
+                  {stagedCheckIn.aircraftCallsign || stagedCheckIn.aircraftLabel}
+                </h2>
+              </div>
+              <button onClick={() => setRouteRequestOpen(false)}>Review Map</button>
+            </div>
+
+            <div className="incomingAircraftSummary">
+              <div>
+                <span>Aircraft</span>
+                <strong>{stagedCheckIn.aircraftLabel}</strong>
+              </div>
+              <div>
+                <span>Height block</span>
+                <strong>
+                  {stagedCheckIn.routeAltitude ||
+                    getDefaultRouteAltitude(
+                      stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId
+                    )}
+                </strong>
+              </div>
+            </div>
+
+            <label className="routeHeightControl">
+              Initial height block
+              <select
+                value={
+                  stagedCheckIn.routeAltitude ||
+                  getDefaultRouteAltitude(
+                    stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId
+                  )
+                }
+                onChange={(event) =>
+                  updateStagedRouteAltitude(event.target.value)
+                }
+              >
+                {heightBlockOptions.map((altitude) => (
+                  <option key={altitude} value={altitude}>
+                    {altitude}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <p>Select the aircraft’s initial IP or holding area.</p>
+            {getRouteableControlPoints(
+              controlPoints,
+              stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId
+            ).length ? (
+              <div className="routePickerGrid">
+                {getRouteableControlPoints(
+                  controlPoints,
+                  stagedCheckIn.aircraftLabel || stagedCheckIn.aircraftId
+                ).map((point) => (
+                  <button
+                    key={point.id}
+                    className="routePickerOption"
+                    onClick={() => confirmMapReady(point.id)}
+                  >
+                    <strong>{formatControlPointLabel(point)}</strong>
+                    <span>{formatMgrs(point.position)}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <>
+                <p className="emptyText">
+                  No suitable IP or HA is plotted yet.
+                </p>
+                <button
+                  className="secondaryAction"
+                  onClick={() => {
+                    setRouteRequestOpen(false);
+                    if (isSelfLedMapSetup) setShowSetupPlotting(true);
+                    else setPanelTab("plotting");
+                  }}
+                >
+                  Plot An IP / HA
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

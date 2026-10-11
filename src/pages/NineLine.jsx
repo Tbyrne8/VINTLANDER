@@ -207,7 +207,7 @@ export default function NineLine({
     const savedBrief = {
       id: `ATTACK-${Date.now()}`,
       createdAt: getNowStamp(),
-      readbackConfirmed,
+      readbackConfirmed: false,
       platform: {
         callsign: selectedPlatform.callsign,
         aircraft: selectedPlatform.aircraft,
@@ -240,14 +240,12 @@ export default function NineLine({
           ...(currentAttackStatus && !Array.isArray(currentAttackStatus)
             ? currentAttackStatus
             : {}),
-          phase: readbackConfirmed ? "Readback correct" : "9-Line passed",
+          phase: "9-Line passed",
           linkedBriefId: savedBrief.id,
-          bda: readbackConfirmed
-            ? `9-Line linked and readback confirmed for ${savedBrief.platform.callsign} onto ${savedBrief.target.id}.`
-            : `9-Line linked for ${savedBrief.platform.callsign} onto ${savedBrief.target.id}; readback pending.`,
+          bda: `9-Line linked for ${savedBrief.platform.callsign} onto ${savedBrief.target.id}; aircraft readback starting.`,
         })
       );
-      onNavigate("tacp");
+      onNavigate("attack");
     }
   }
 
@@ -451,9 +449,6 @@ export default function NineLine({
           </div>
 
           <div className="briefActions">
-            <button onClick={() => setReadbackConfirmed((current) => !current)}>
-              {readbackConfirmed ? "Mark Readback Pending" : "Confirm Readback"}
-            </button>
             <button onClick={copyBrief}>Copy Brief</button>
             <button onClick={saveBrief}>
               {serialMode ? "Save & Continue To Attack" : "Save Attack Brief"}

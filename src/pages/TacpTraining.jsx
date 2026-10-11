@@ -38,6 +38,7 @@ import {
   getTargetDescription,
   getTargetOptionLabel,
 } from "../utils/targetDescription.js";
+import { formatGeneratedBda } from "../utils/bdaReport.js";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -522,6 +523,7 @@ export default function TacpTraining({
   serialVariant = "ds",
   onExitSerial = () => {},
   linkedRole = null,
+  attackOnly = false,
 }) {
   const [logs, setLogs] = useState(() => loadSavedList(savedTrainingLogs));
   const [missionEvents, setMissionEvents] = useState(loadMissionEvents);
@@ -876,6 +878,19 @@ export default function TacpTraining({
       setAttackReadbackState("Correct");
     }
   }, [attackReadbackState, linkedAttackBrief]);
+  useEffect(() => {
+    if (!linkedAttackBrief) return;
+    const linkedPlatform = platforms.find(
+      (platform) => platform.callsign === linkedAttackBrief.platform.callsign
+    );
+    if (linkedPlatform) setSelectedAttackPlatformId(linkedPlatform.id);
+    if (linkedAttackBrief.target?.id) {
+      setSelectedAttackTargetId(linkedAttackBrief.target.id);
+    }
+    if (linkedAttackBrief.brief) {
+      setAttackBriefDraft(linkedAttackBrief.brief);
+    }
+  }, [linkedAttackBrief, platforms]);
   const selectedAttackPlatform = platforms.find(
     (platform) => platform.id === selectedAttackPlatformId
   );
@@ -1313,7 +1328,9 @@ export default function TacpTraining({
     const manualScenario =
       checkInDeliveryMode === "dsVoice"
         ? dsVoicePreview
-        : null;
+        : generateCheckIn(aircraftId, {
+            controllerCallsign: controller.callsign,
+          });
     return {
       id: `CHECKIN-${Date.now()}`,
       aircraftId,
@@ -1324,6 +1341,10 @@ export default function TacpTraining({
         checkInDeliveryOptions.find((option) => option.id === checkInDeliveryMode)
           ?.label || "Generated text",
       manualScenario,
+      aircraftCallsign: manualScenario?.correctCheckIn?.aircraftCallsign,
+      routeAltitude: extractHeightBlock(
+        manualScenario?.correctCheckIn?.positionAltitude || ""
+      ),
       pushedAt: getTimestamp(),
       route: "Awaiting troop route to an IP or HA before check-in.",
       routeStatus: "AWAITING TROOP ROUTE",
@@ -1347,19 +1368,27 @@ export default function TacpTraining({
           );
     const aircraftId = resolvedAircraft?.id || "typhoon";
     const aircraftLabel = resolvedAircraft?.label || "Typhoon";
+    const controllerCallsign =
+      selfSetup.callsign.trim().toUpperCase() || controller.callsign;
+    const preparedScenario = generateCheckIn(aircraftId, {
+      controllerCallsign,
+    });
 
     return {
       id: `CHECKIN-${Date.now()}`,
       aircraftId,
       aircraftLabel,
-      controllerCallsign:
-        selfSetup.callsign.trim().toUpperCase() || controller.callsign,
+      controllerCallsign,
       deliveryMode: selfSetup.checkInDeliveryMode,
       deliveryLabel:
         checkInDeliveryOptions.find(
           (option) => option.id === selfSetup.checkInDeliveryMode
         )?.label || "Generated radio voice",
-      manualScenario: null,
+      manualScenario: preparedScenario,
+      aircraftCallsign: preparedScenario.correctCheckIn.aircraftCallsign,
+      routeAltitude: extractHeightBlock(
+        preparedScenario.correctCheckIn.positionAltitude
+      ),
       pushedAt: getTimestamp(),
       route: isRotaryWingAircraft(aircraftLabel)
         ? "Aircraft awaiting route to a holding area before being pushed to a BP."
@@ -2474,11 +2503,15 @@ export default function TacpTraining({
   }
 
   return (
-    <main className="page trainingPage">
+    <main className={`page trainingPage ${attackOnly ? "attackOnlyPage" : ""}`}>
       <header className="pageHeader">
         <div>
-          <h1>TACP Mission Trainer</h1>
-          <p>Run a complete serial from aircraft check-in through effects and BDA.</p>
+          <h1>{attackOnly ? "Live Attack" : "TACP Mission Trainer"}</h1>
+          <p>
+            {attackOnly
+              ? "Control the aircraft from 9-line readback through attack, effects and BDA."
+              : "Run a complete serial from aircraft check-in through effects and BDA."}
+          </p>
         </div>
         <div className="headerActions">
           <span className={progress === 100 ? "statusPill ready" : "statusPill"}>
@@ -2490,15 +2523,22 @@ export default function TacpTraining({
         </div>
       </header>
 
-      {serialMode && serialVariant !== "self" && (
+      {attackOnly ? (
+        <section className="missionLauncher">
+          <button onClick={() => onNavigate("tacp")}>Mission</button>
+          <button onClick={() => onNavigate("map")}>Map / OP</button>
+          <button onClick={() => onNavigate("nine")}>Build 9-Line</button>
+          <button className="activeMode">Attack</button>
+        </section>
+      ) : serialMode && serialVariant !== "self" ? (
         <section className="missionLauncher">
           <button onClick={() => onNavigate("checkin")}>Check-In</button>
           <button onClick={() => onNavigate("map")}>Map / OP</button>
           <button onClick={() => onNavigate("nine")}>Build 9-Line</button>
         </section>
-      )}
+      ) : null}
 
-      <div className="trainingTabs" role="tablist" aria-label="Training views">
+      {!attackOnly && <div className="trainingTabs" role="tablist" aria-label="Training views">
         <button
           className={activeView === "trainee" ? "active" : ""}
           onClick={() => setActiveView("trainee")}
@@ -2519,10 +2559,11 @@ export default function TacpTraining({
         >
           Live Aircraft
         </button>
-      </div>
+      </div>}
 
       {activeView === "trainee" && (
         <>
+      {!attackOnly && <>
       <section className="trainingGrid">
         <div className="card serialControl">
           <h2>Situation Update</h2>
@@ -2719,7 +2760,9 @@ export default function TacpTraining({
           })}
         </div>
       </section>
+      </>}
 
+      {attackOnly && <>
       <section className="trainingGrid">
         <div className="card serialSnapshot">
           <h2>Attack / Effects</h2>
@@ -3001,12 +3044,18 @@ export default function TacpTraining({
             onMarkReadback={markReadback}
             onSetAttackPhase={setAttackPhase}
             onSendBda={serialVariant === "self" ? autoSelfLedBda : sendPlatformBda}
+            autoStartReadback={attackOnly}
           />
 
           <AttackRunMap
             attackStatus={attackStatus}
             brief={linkedAttackBrief}
             platform={linkedAttackBrief?.platform || selectedAttackPlatform}
+            targets={targets}
+            controlPoints={controlPoints}
+            observerPosition={observerPosition}
+            artillery={artillery}
+            fullTacticalPicture={attackOnly}
           />
 
           {serialVariant === "self" && (
@@ -3031,6 +3080,7 @@ export default function TacpTraining({
           )}
         </div>
       </section>
+      </>}
 
       {routePickerOpen && (
         <div className="tacticalPopupOverlay">
@@ -4264,20 +4314,6 @@ function createImpactSolution(targetPosition, seed = "") {
       Math.cos(angle) * missDistanceMetres
     ),
   };
-}
-
-function formatGeneratedBda(outcome, missDistanceMetres) {
-  const roundedDistance = Math.max(0, Math.round(Number(missDistanceMetres) || 0));
-
-  if (outcome === "hit") {
-    return `Weapon impact on target. Effective hit, estimated miss distance ${roundedDistance} metres`;
-  }
-
-  if (outcome === "near miss") {
-    return `Weapon impact close to target, estimated miss distance ${roundedDistance} metres. Effects uncertain`;
-  }
-
-  return `Weapon missed target, estimated miss distance ${roundedDistance} metres. Re-attack required`;
 }
 
 function formatCountdown(milliseconds = 0) {

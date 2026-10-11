@@ -133,6 +133,7 @@ export default function MissionRadioPanel({
   onMarkReadback,
   onSetAttackPhase,
   onSendBda,
+  autoStartReadback = false,
 }) {
   const [playing, setPlaying] = useState(false);
   const [currentCall, setCurrentCall] = useState("Standby");
@@ -146,6 +147,8 @@ export default function MissionRadioPanel({
   const weaponReleaseTimerRef = useRef(null);
   const impactCallTimerRef = useRef(null);
   const bdaReadyTimerRef = useRef(null);
+  const autoReadbackStartedRef = useRef(false);
+  const autoReadbackDetailsRef = useRef(null);
   const impactDetailsRef = useRef(null);
   impactDetailsRef.current = {
     controllerCallsign,
@@ -175,6 +178,7 @@ export default function MissionRadioPanel({
     setLastBdaTransmission("");
     setHeadingCallPending(false);
     setWeaponReleasePending(false);
+    autoReadbackStartedRef.current = false;
   }, [platform?.callsign, target?.id]);
   useEffect(() => {
     if (attackStatus.phase === "On station") {
@@ -192,12 +196,23 @@ export default function MissionRadioPanel({
   }, [attackStatus.phase]);
 
   useEffect(() => {
+    if (
+      canSendBda &&
+      attackStatus.phase === "Effects observed" &&
+      !["complete", "bdaReady"].includes(sequenceStage)
+    ) {
+      setSequenceStage("bdaReady");
+    }
+  }, [attackStatus.phase, canSendBda, sequenceStage]);
+
+  useEffect(() => {
     if (attackStatus.phase !== "Weapon away" || !attackStatus.weaponImpactAt) return;
 
     window.clearTimeout(impactCallTimerRef.current);
     impactCallTimerRef.current = window.setTimeout(
       async () => {
         const details = impactDetailsRef.current;
+        const bdaReadyAt = Date.now() + 15000;
         await details.playSequence(
           "Weapon impact",
           [{ text: `${details.controllerCallsign}, ${details.callsign}, splash. Egress ${details.egress}.` }],
@@ -212,7 +227,7 @@ export default function MissionRadioPanel({
             [{ text: `${readyDetails.controllerCallsign}, ${readyDetails.callsign}, ready for BDA.` }],
             "bdaReady"
           );
-        }, 15000);
+        }, Math.max(0, bdaReadyAt - Date.now()));
       },
       Math.max(0, attackStatus.weaponImpactAt - Date.now())
     );
@@ -292,11 +307,11 @@ export default function MissionRadioPanel({
 
     try {
       for (const call of calls) await playOne(call);
-      if (nextStage) setSequenceStage(nextStage);
     } catch (error) {
       console.warn("Mission radio call failed", error);
       alert("Mission radio could not play. Check the speech service and try again.");
     } finally {
+      if (nextStage) setSequenceStage(nextStage);
       stopPlayback();
     }
   }
@@ -375,6 +390,50 @@ export default function MissionRadioPanel({
     .map(([number, , value]) => `Line ${number}, ${value || "unknown"}.`)
     .join(" ");
   const bdaTransmission = `${controllerCallsign}, ${callsign}, BDA. ${bdaEffect}. ${bdaText || "No further movement observed."}`;
+  autoReadbackDetailsRef.current = {
+    controllerCallsign,
+    callsign,
+    elevation,
+    location,
+    restrictions,
+    playSequence,
+  };
+
+  useEffect(() => {
+    if (
+      !autoStartReadback ||
+      !briefReady ||
+      autoReadbackStartedRef.current ||
+      sequenceStage !== "tasking"
+    ) {
+      return;
+    }
+
+    autoReadbackStartedRef.current = true;
+    const details = autoReadbackDetailsRef.current;
+    details.playSequence(
+      "Aircraft 9-Line readback",
+      [
+        {
+          text: `${details.controllerCallsign}, ${details.callsign}, readback. Elevation ${details.elevation}. Target location ${details.location}. Restrictions ${details.restrictions}.`,
+        },
+      ],
+      "readback"
+    );
+  }, [autoStartReadback, briefReady, sequenceStage]);
+
+  async function deliverBda() {
+    setLastBdaTransmission(bdaTransmission);
+    await playSequence(
+      "Ready BDA",
+      [
+        { speaker: "controller", text: `${callsign}, ${controllerCallsign}, ready BDA.` },
+        { text: bdaTransmission },
+      ],
+      "complete"
+    );
+    onSendBda();
+  }
   return (
     <section className="missionRadioPanel">
       <div className="missionRadioHeader">
@@ -421,7 +480,6 @@ export default function MissionRadioPanel({
           disabled={playing || !briefReady || sequenceStage !== "readback"}
           onClick={() => completeCorrectReadback(
             [
-              { text: `${controllerCallsign}, ${callsign}, readback. Elevation ${elevation}. Target location ${location}. Restrictions ${restrictions}.` },
               { speaker: "controller", text: `${callsign}, ${controllerCallsign}, readback correct. Push when able.` },
             ]
           )}
@@ -504,18 +562,7 @@ export default function MissionRadioPanel({
 
         <button
           disabled={playing || !canSendBda || sequenceStage !== "bdaReady"}
-          onClick={() => {
-            setLastBdaTransmission(bdaTransmission);
-            playSequence(
-              "Ready BDA",
-              [
-                { speaker: "controller", text: `${callsign}, ${controllerCallsign}, ready BDA.` },
-                { text: bdaTransmission },
-              ],
-              "complete",
-              onSendBda
-            );
-          }}
+          onClick={deliverBda}
         >
           5. Ready BDA
         </button>
