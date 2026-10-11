@@ -1344,6 +1344,63 @@ export default function TacpTraining({
     setPendingCheckIn(buildDsAircraftTasking());
   }
 
+  function buildSelfLedAircraftTasking() {
+    const availableAircraft = getAircraftOptions();
+    const resolvedAircraft =
+      selectedAircraft === "random"
+        ? availableAircraft[Math.floor(Math.random() * availableAircraft.length)]
+        : availableAircraft.find(
+            (aircraft) => aircraft.id === selectedAircraft.replace("type:", "")
+          );
+    const aircraftId = resolvedAircraft?.id || "typhoon";
+    const aircraftLabel = resolvedAircraft?.label || "Typhoon";
+
+    return {
+      id: `CHECKIN-${Date.now()}`,
+      aircraftId,
+      aircraftLabel,
+      controllerCallsign:
+        selfSetup.callsign.trim().toUpperCase() || controller.callsign,
+      deliveryMode: selfSetup.checkInDeliveryMode,
+      deliveryLabel:
+        checkInDeliveryOptions.find(
+          (option) => option.id === selfSetup.checkInDeliveryMode
+        )?.label || "Generated radio voice",
+      manualScenario: null,
+      pushedAt: getTimestamp(),
+      route: isRotaryWingAircraft(aircraftLabel)
+        ? "Aircraft awaiting route to a holding area before being pushed to a BP."
+        : "Aircraft awaiting signaller route to the correct IP.",
+      routeStatus: isRotaryWingAircraft(aircraftLabel)
+        ? "REQUESTING ROUTE TO HA"
+        : "REQUESTING ROUTE TO IP",
+      clearanceRequested: true,
+      routedControlPoint: null,
+      routePosition: null,
+      routeStartedAt: null,
+      inboundStartPosition: null,
+      extraPlaytimeMinutes: 0,
+      routedAt: null,
+    };
+  }
+
+  function addSelfLedAircraft() {
+    if (pendingCheckIn || window.localStorage.getItem(savedStagedCheckIn)) {
+      alert("Complete the current aircraft check-in before adding another aircraft.");
+      return;
+    }
+
+    const tasking = buildSelfLedAircraftTasking();
+    window.localStorage.setItem(savedStagedCheckIn, JSON.stringify(tasking));
+    recordMissionEvent({
+      type: "checkin",
+      title: `${tasking.aircraftLabel} added to the self-led serial`,
+      detail: "Awaiting map review and routing before check-in.",
+      data: { tasking },
+    });
+    onNavigate("map");
+  }
+
   function startSelfLedGeneratedSerial(scenario = null) {
     try {
       const opPosition = parseMgrs(scenario?.opGrid || selfSetup.opGrid);
@@ -1399,42 +1456,7 @@ export default function TacpTraining({
         reciprocalHa,
       ];
       const updatedTargets = [...targets, selfLedTarget];
-      const availableAircraft = getAircraftOptions();
-      const resolvedAircraft =
-        selectedAircraft === "random"
-          ? availableAircraft[Math.floor(Math.random() * availableAircraft.length)]
-          : availableAircraft.find(
-              (aircraft) => aircraft.id === selectedAircraft.replace("type:", "")
-            );
-      const aircraftId = resolvedAircraft?.id || "typhoon";
-      const aircraftLabel = resolvedAircraft?.label || "Typhoon";
-      const tasking = {
-        id: `CHECKIN-${Date.now()}`,
-        aircraftId,
-        aircraftLabel,
-        controllerCallsign:
-          selfSetup.callsign.trim().toUpperCase() || defaultController.callsign,
-        deliveryMode: selfSetup.checkInDeliveryMode,
-        deliveryLabel:
-          checkInDeliveryOptions.find(
-            (option) => option.id === selfSetup.checkInDeliveryMode
-          )?.label || "Generated radio voice",
-        manualScenario: null,
-        pushedAt: getTimestamp(),
-        route: isRotaryWingAircraft(aircraftLabel)
-          ? "Aircraft awaiting route to a holding area before being pushed to a BP."
-          : "Aircraft awaiting signaller route to the correct IP.",
-        routeStatus: isRotaryWingAircraft(aircraftLabel)
-          ? "REQUESTING ROUTE TO HA"
-          : "REQUESTING ROUTE TO IP",
-        clearanceRequested: true,
-        routedControlPoint: null,
-        routePosition: null,
-        routeStartedAt: null,
-        inboundStartPosition: null,
-        extraPlaytimeMinutes: 0,
-        routedAt: null,
-      };
+      const tasking = buildSelfLedAircraftTasking();
 
       setObserverPosition(opPosition);
       setTargets(updatedTargets);
@@ -2492,7 +2514,8 @@ export default function TacpTraining({
             <div className="serialCard checkInAlert">
               <small>Aircraft ready to check in</small>
               <p>
-                {pendingCheckIn.aircraftLabel} pushed by DS at{" "}
+                {pendingCheckIn.aircraftLabel}{" "}
+                {serialVariant === "self" ? "generated" : "pushed by DS"} at{" "}
                 {pendingCheckIn.pushedAt}. Callsign to answer:{" "}
                 {pendingCheckIn.controllerCallsign}.
               </p>
@@ -2538,6 +2561,27 @@ export default function TacpTraining({
               readOnly
             />
           </label>
+
+          {serialVariant === "self" && (
+            <div className="serialCard">
+              <small>SELF-LED AIRCRAFT</small>
+              <p>Add another aircraft without waiting for a DS push.</p>
+              <label className="field">
+                Next aircraft
+                <select
+                  value={selectedAircraft}
+                  onChange={(event) => setSelectedAircraft(event.target.value)}
+                >
+                  {aircraftChoices.map((aircraft) => (
+                    <option key={aircraft.id} value={aircraft.id}>
+                      {aircraft.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button onClick={addSelfLedAircraft}>Add Aircraft</button>
+            </div>
+          )}
         </div>
 
         <div className="card serialSnapshot">

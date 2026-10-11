@@ -129,6 +129,7 @@ export default function MissionRadioPanel({
 }) {
   const [playing, setPlaying] = useState(false);
   const [currentCall, setCurrentCall] = useState("Standby");
+  const [lastBdaTransmission, setLastBdaTransmission] = useState("");
   const [sequenceStage, setSequenceStage] = useState("tasking");
   const audioRef = useRef(null);
   const bedRef = useRef(null);
@@ -137,6 +138,7 @@ export default function MissionRadioPanel({
   useEffect(() => {
     setSequenceStage("tasking");
     setCurrentCall("Standby");
+    setLastBdaTransmission("");
   }, [platform?.callsign, target?.id]);
   useEffect(() => {
     if (attackStatus.phase === "On station") {
@@ -241,6 +243,7 @@ export default function MissionRadioPanel({
   const fullNineLine = (lines || [])
     .map(([number, , value]) => `Line ${number}, ${value || "unknown"}.`)
     .join(" ");
+  const bdaTransmission = `${controllerCallsign}, ${callsign}, BDA. ${bdaEffect}. ${bdaText || "No further movement observed."}`;
   const inHotCalls = [
     { text: `${controllerCallsign}, ${callsign}, in hot. ${mark}.` },
     ...(String(mark).toUpperCase().includes("LASER")
@@ -418,14 +421,29 @@ export default function MissionRadioPanel({
 
         <button
           disabled={playing || !canSendBda}
-          onClick={() => playSequence(
-            "Aircraft BDA",
-            [{ text: `${controllerCallsign}, ${callsign}, BDA. ${bdaEffect}. ${bdaText || "No further movement observed."}` }],
-            "complete",
-            onSendBda
-          )}
+          onClick={() => {
+            setLastBdaTransmission(bdaTransmission);
+            playSequence(
+              "Aircraft BDA",
+              [{ text: bdaTransmission }],
+              "complete",
+              onSendBda
+            );
+          }}
         >
           9. Send BDA
+        </button>
+
+        <button
+          disabled={playing || !lastBdaTransmission}
+          onClick={() =>
+            playSequence(
+              "Replay aircraft BDA",
+              [{ text: lastBdaTransmission }]
+            )
+          }
+        >
+          Replay BDA Voice
         </button>
 
         <button

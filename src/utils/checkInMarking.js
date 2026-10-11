@@ -234,7 +234,10 @@ if (field === "aircraftNumberType") {
       user === "NIL REMARKS" ||
       user === "NONE" ||
       user === "NIL" ||
-      user === "NO"
+      user === "NO" ||
+      user === "N/A" ||
+      user === "NA" ||
+      user === "NOT APPLICABLE"
     );
   }
 

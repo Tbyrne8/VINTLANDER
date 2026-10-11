@@ -36,4 +36,7 @@ test("mission, ordnance, codes and remarks accept spoken variants", () => {
   accepts("downlinkCode", "ONE TWO THREE FOUR", "1234");
   accepts("abortCode", "CH", "CHARLIE HOTEL");
   accepts("remarks", "NIL", "NO FURTHER REMARKS");
+  accepts("remarks", "N/A", "NO FURTHER REMARKS");
+  accepts("remarks", "NA", "NO FURTHER REMARKS");
+  accepts("remarks", "NOT APPLICABLE", "NO FURTHER REMARKS");
 });

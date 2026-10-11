@@ -230,7 +230,12 @@ export default function MapTrainer({
   const pendingRouteLine = useMemo(() => {
     if (!pendingCheckIn?.routePosition || !routedPendingPlatform) return null;
 
-    if (routedPendingPlatform.routePhase !== "inbound") return null;
+    if (
+      routedPendingPlatform.routePhase !== "inbound" ||
+      getDistanceMetres(routedPendingPlatform.position, pendingCheckIn.routePosition) <= 25
+    ) {
+      return null;
+    }
 
     return {
       from: routedPendingPlatform.position,
@@ -240,7 +245,12 @@ export default function MapTrainer({
   const platformRouteLines = useMemo(
     () =>
       livePlatformTracks
-        .filter((platform) => platform.routePhase === "inbound" && platform.routePosition)
+        .filter(
+          (platform) =>
+            platform.routePhase === "inbound" &&
+            platform.routePosition &&
+            getDistanceMetres(platform.position, platform.routePosition) > 25
+        )
         .map((platform) => ({
           id: platform.id,
           from: platform.position,
@@ -1389,7 +1399,7 @@ function getLivePlatformTrack(platform, anchor, tick) {
   return getPlatformTrack(platform, anchor, tick);
 }
 
-function getInboundPlatformTrack(platform, tick) {
+function getInboundPlatformTrack(platform, _tick) {
   const routePosition = platform.routePosition;
   const routeStartedAt = platform.routeStartedAt || Date.now();
   const elapsed = Date.now() - routeStartedAt;
@@ -1412,8 +1422,11 @@ function getInboundPlatformTrack(platform, tick) {
     callsign: platform.callsign,
     aircraft: platform.aircraft,
     altitude: formatSpeedLabel(platform.aircraft),
-    mode: `Routing to ${platform.routedControlPoint?.label || "IP/HA"}`,
-    routePhase: "inbound",
+    mode:
+      inboundProgress >= 1
+        ? `Established in ${platform.routedControlPoint?.label || "IP/HA"}`
+        : `Routing to ${platform.routedControlPoint?.label || "IP/HA"}`,
+    routePhase: inboundProgress >= 1 ? "holding" : "inbound",
   };
 }
 
