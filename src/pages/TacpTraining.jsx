@@ -19,6 +19,8 @@ import NineLineHeadingField from "../components/NineLineHeadingField.jsx";
 import NineLineDistanceField from "../components/NineLineDistanceField.jsx";
 import NineLineEgressField from "../components/NineLineEgressField.jsx";
 import NineLineFriendliesField from "../components/NineLineFriendliesField.jsx";
+import { friendlyUnitTypes } from "../utils/friendlyUnitTypes.js";
+import { enemyUnitTypes } from "../utils/enemyUnitTypes.js";
 import {
   clearMissionEvents,
   loadMissionEvents,
@@ -587,6 +589,8 @@ export default function TacpTraining({
   const [controlPointType, setControlPointType] = useState("ip");
   const [controlPointName, setControlPointName] = useState("");
   const [targetType, setTargetType] = useState("enemy");
+  const [friendlyUnitType, setFriendlyUnitType] = useState("infantry");
+  const [enemyUnitType, setEnemyUnitType] = useState("infantry");
   const [targetDescription, setTargetDescription] = useState("");
   const [artilleryName, setArtilleryName] = useState("");
   const [artilleryGunGrid, setArtilleryGunGrid] = useState("");
@@ -1516,6 +1520,8 @@ export default function TacpTraining({
         id: `TGT-${String(targetNumber).padStart(3, "0")}`,
         description: targetDescription.trim(),
         type: targetType,
+        ...(targetType === "friendly" ? { unitType: friendlyUnitType } : {}),
+        ...(targetType === "enemy" ? { unitType: enemyUnitType } : {}),
         position,
         mgrs: mgrs.forward([position.lng, position.lat]),
         createdAt: new Date().toLocaleTimeString(),
@@ -3537,6 +3543,36 @@ export default function TacpTraining({
                     <option value="objective">Objective</option>
                   </select>
                 </label>
+                {targetType === "friendly" && (
+                  <label className="field">
+                    Friendly unit type
+                    <select
+                      value={friendlyUnitType}
+                      onChange={(event) => setFriendlyUnitType(event.target.value)}
+                    >
+                      {friendlyUnitTypes.map((unitType) => (
+                        <option key={unitType.value} value={unitType.value}>
+                          {unitType.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {targetType === "enemy" && (
+                  <label className="field">
+                    Enemy unit type
+                    <select
+                      value={enemyUnitType}
+                      onChange={(event) => setEnemyUnitType(event.target.value)}
+                    >
+                      {enemyUnitTypes.map((unitType) => (
+                        <option key={unitType.value} value={unitType.value}>
+                          {unitType.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               </div>
 
               <label className="field">

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import * as mgrs from "mgrs";
+import { friendlyUnitTypes } from "../utils/friendlyUnitTypes.js";
+import { enemyUnitTypes } from "../utils/enemyUnitTypes.js";
 
 export default function TargetRegister({
   targets,
@@ -10,6 +12,8 @@ export default function TargetRegister({
 }) {
   const [description, setDescription] = useState("");
   const [targetType, setTargetType] = useState("enemy");
+  const [friendlyUnitType, setFriendlyUnitType] = useState("infantry");
+  const [enemyUnitType, setEnemyUnitType] = useState("infantry");
 
   const nextTargetNumber = targets.length + 1;
   const nextTargetId = `TGT-${String(nextTargetNumber).padStart(3, "0")}`;
@@ -24,6 +28,8 @@ export default function TargetRegister({
       id: nextTargetId,
       description: description.trim(),
       type: targetType,
+      ...(targetType === "friendly" ? { unitType: friendlyUnitType } : {}),
+      ...(targetType === "enemy" ? { unitType: enemyUnitType } : {}),
       position,
       mgrs: mgrs.forward([position.lng, position.lat]),
       createdAt: new Date().toLocaleTimeString(),
@@ -56,6 +62,38 @@ export default function TargetRegister({
         <option value="unknown">Unknown</option>
         <option value="objective">Objective</option>
       </select>
+
+      {targetType === "friendly" && (
+        <label className="field">
+          Friendly unit type
+          <select
+            value={friendlyUnitType}
+            onChange={(event) => setFriendlyUnitType(event.target.value)}
+          >
+            {friendlyUnitTypes.map((unitType) => (
+              <option key={unitType.value} value={unitType.value}>
+                {unitType.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {targetType === "enemy" && (
+        <label className="field">
+          Enemy unit type
+          <select
+            value={enemyUnitType}
+            onChange={(event) => setEnemyUnitType(event.target.value)}
+          >
+            {enemyUnitTypes.map((unitType) => (
+              <option key={unitType.value} value={unitType.value}>
+                {unitType.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <button onClick={saveTarget}>Save Current Target</button>
 
