@@ -1,4 +1,6 @@
+import { useState } from "react";
 import * as mgrs from "mgrs";
+import { parseMgrs } from "../utils/mgrs.js";
 import {
   getBearingDegrees,
   getCompassDirection,
@@ -14,6 +16,7 @@ export default function ObserverPanel({
   showObserverLine,
   setShowObserverLine,
 }) {
+  const [observerGrid, setObserverGrid] = useState("");
   const hasObserver = Boolean(observerPosition);
 
   const distance = hasObserver
@@ -30,6 +33,18 @@ export default function ObserverPanel({
     setObserverPosition(position);
   }
 
+  function setOpAtGrid() {
+    try {
+      const nextPosition = parseMgrs(observerGrid);
+      setObserverPosition(nextPosition);
+      setPosition(nextPosition);
+      setMapResetKey((current) => current + 1);
+      setObserverGrid("");
+    } catch {
+      alert("Invalid OP MGRS grid.");
+    }
+  }
+
   function goToOp() {
     if (!observerPosition) return;
 
@@ -42,6 +57,16 @@ export default function ObserverPanel({
       <h2>OBSERVER POSITION</h2>
 
       <button onClick={setOpHere}>Set OP at Crosshair</button>
+
+      <label className="field">
+        OP MGRS grid
+        <input
+          value={observerGrid}
+          onChange={(event) => setObserverGrid(event.target.value.toUpperCase())}
+          placeholder="Example: 30U WB 68569 74674"
+        />
+      </label>
+      <button onClick={setOpAtGrid}>Set OP From Grid</button>
 
       {hasObserver && (
         <>

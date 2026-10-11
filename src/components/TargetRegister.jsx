@@ -1,5 +1,6 @@
 import { useState } from "react";
 import * as mgrs from "mgrs";
+import { parseMgrs } from "../utils/mgrs.js";
 import { friendlyUnitTypes } from "../utils/friendlyUnitTypes.js";
 import { enemyUnitTypes } from "../utils/enemyUnitTypes.js";
 
@@ -14,14 +15,15 @@ export default function TargetRegister({
   const [targetType, setTargetType] = useState("enemy");
   const [friendlyUnitType, setFriendlyUnitType] = useState("infantry");
   const [enemyUnitType, setEnemyUnitType] = useState("infantry");
+  const [targetGrid, setTargetGrid] = useState("");
 
   const nextTargetNumber = targets.length + 1;
   const nextTargetId = `TGT-${String(nextTargetNumber).padStart(3, "0")}`;
 
-  function saveTarget() {
+  function saveTargetAtPosition(targetPosition) {
     if (!description.trim()) {
       alert("Add a target description first.");
-      return;
+      return false;
     }
 
     const newTarget = {
@@ -30,14 +32,27 @@ export default function TargetRegister({
       type: targetType,
       ...(targetType === "friendly" ? { unitType: friendlyUnitType } : {}),
       ...(targetType === "enemy" ? { unitType: enemyUnitType } : {}),
-      position,
-      mgrs: mgrs.forward([position.lng, position.lat]),
+      position: targetPosition,
+      mgrs: mgrs.forward([targetPosition.lng, targetPosition.lat]),
       createdAt: new Date().toLocaleTimeString(),
     };
 
     setTargets([...targets, newTarget]);
     setDescription("");
     setTargetType("enemy");
+    return true;
+  }
+
+  function saveTargetAtGrid() {
+    try {
+      const targetPosition = parseMgrs(targetGrid);
+      if (!saveTargetAtPosition(targetPosition)) return;
+      setTargetGrid("");
+      setPosition(targetPosition);
+      setMapResetKey((current) => current + 1);
+    } catch {
+      alert("Invalid target MGRS grid.");
+    }
   }
 
   function goToTarget(target) {
@@ -95,7 +110,19 @@ export default function TargetRegister({
         </label>
       )}
 
-      <button onClick={saveTarget}>Save Current Target</button>
+      <button onClick={() => saveTargetAtPosition(position)}>
+        Plot Target At Crosshair
+      </button>
+
+      <label className="field">
+        Target MGRS grid
+        <input
+          value={targetGrid}
+          onChange={(event) => setTargetGrid(event.target.value.toUpperCase())}
+          placeholder="Example: 30U WB 68569 74674"
+        />
+      </label>
+      <button onClick={saveTargetAtGrid}>Plot Target From Grid</button>
 
       {targets.length === 0 && <p className="emptyText">No saved targets yet.</p>}
 

@@ -334,6 +334,41 @@ select {
   overflow-y: auto;
 }
 
+.mapPanelTabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 5px;
+  border: 1px solid #3f563f;
+  border-radius: 10px;
+  background: #101810;
+}
+
+.mapPanelTabs button {
+  margin: 0;
+}
+
+.mapPanelTabs button.activeMode {
+  border-color: #f5c542;
+  background: #465a28;
+  color: #fff2a8;
+}
+
+.plottingTabPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.plottingHint {
+  margin: 4px 0 0;
+  padding: 10px;
+  border-left: 3px solid #f5c542;
+  background: #202b20;
+  color: #d6dec2;
+  line-height: 1.4;
+}
+
 .mapBox {
   height: calc(100vh - 58px);
   position: relative;

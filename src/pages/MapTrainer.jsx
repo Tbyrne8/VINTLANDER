@@ -157,6 +157,7 @@ export default function MapTrainer({
   const [mapType, setMapType] = useState("satellite");
   const [zoom, setZoom] = useState(13);
   const [mapResetKey, setMapResetKey] = useState(0);
+  const [panelTab, setPanelTab] = useState("mission");
   const [targets, setTargets] = useState(() => loadSavedTargets(storageKeys));
   const [observerPosition, setObserverPosition] = useState(() =>
     loadSavedObserverPosition(storageKeys)
@@ -500,28 +501,33 @@ export default function MapTrainer({
     );
   }
 
-  function plotArtilleryPosition() {
+  function saveArtilleryAtPosition(gunPosition) {
+    const item = {
+      id: `ARTY-${Date.now()}`,
+      name: artilleryName.trim().toUpperCase() || `GUNS ${artillery.length + 1}`,
+      gunPosition,
+      gunMgrs: mgrs.forward([gunPosition.lng, gunPosition.lat]),
+      targetPosition: null,
+      createdAt: new Date().toLocaleTimeString(),
+      source: "MAP PLOT",
+    };
+    setArtillery((current) => [...current, item]);
+    setArtilleryName("");
+    setArtilleryGrid("");
+    recordMissionEvent({
+      type: "artillery",
+      title: `${item.name} plotted`,
+      detail: `Artillery position ${formatMgrs(gunPosition)} for deconfliction.`,
+      data: { artillery: item },
+    });
+  }
+
+  function plotArtilleryAtGrid() {
     try {
       const gunPosition = parseMgrs(artilleryGrid);
-      const item = {
-        id: `ARTY-${Date.now()}`,
-        name: artilleryName.trim().toUpperCase() || `GUNS ${artillery.length + 1}`,
-        gunPosition,
-        gunMgrs: mgrs.forward([gunPosition.lng, gunPosition.lat]),
-        targetPosition: null,
-        createdAt: new Date().toLocaleTimeString(),
-        source: "MAP PLOT",
-      };
-      setArtillery((current) => [...current, item]);
-      setArtilleryName("");
-      setArtilleryGrid("");
+      saveArtilleryAtPosition(gunPosition);
       setPosition(gunPosition);
-      recordMissionEvent({
-        type: "artillery",
-        title: `${item.name} plotted`,
-        detail: `Artillery position ${formatMgrs(gunPosition)} for deconfliction.`,
-        data: { artillery: item },
-      });
+      setMapResetKey((current) => current + 1);
     } catch {
       alert("Invalid artillery MGRS grid.");
     }
@@ -716,6 +722,25 @@ export default function MapTrainer({
           Clear Mission
         </button>
 
+        <div className="mapPanelTabs" role="tablist" aria-label="Map panel">
+          <button
+            className={panelTab === "mission" ? "activeMode" : ""}
+            onClick={() => setPanelTab("mission")}
+            role="tab"
+            aria-selected={panelTab === "mission"}
+          >
+            Mission
+          </button>
+          <button
+            className={panelTab === "plotting" ? "activeMode" : ""}
+            onClick={() => setPanelTab("plotting")}
+            role="tab"
+            aria-selected={panelTab === "plotting"}
+          >
+            Plotting
+          </button>
+        </div>
+
         <MapControls
           mgrsInput={mgrsInput}
           setMgrsInput={setMgrsInput}
@@ -728,6 +753,8 @@ export default function MapTrainer({
           setMapResetKey={setMapResetKey}
         />
 
+        {panelTab === "mission" && (
+          <>
         {serialMode && stagedCheckIn && (
           <div className="serialCard routeCard">
             <small>MAP REVIEW BEFORE CHECK-IN</small>
@@ -823,7 +850,15 @@ export default function MapTrainer({
             </div>
           ))}
         </div>
+          </>
+        )}
 
+        {panelTab === "plotting" && (
+          <div className="plottingTabPanel">
+            <p className="plottingHint">
+              Move the map beneath the crosshair or enter an MGRS grid for the
+              item you want to plot.
+            </p>
         <ObserverPanel
           observerPosition={observerPosition}
           setObserverPosition={setObserverPosition}
@@ -978,7 +1013,10 @@ export default function MapTrainer({
               placeholder="Example: 30U XB 12345 67890"
             />
           </label>
-          <button onClick={plotArtilleryPosition}>Plot Artillery Position</button>
+          <button onClick={() => saveArtilleryAtPosition(position)}>
+            Plot Artillery At Crosshair
+          </button>
+          <button onClick={plotArtilleryAtGrid}>Plot Artillery From Grid</button>
           {artillery.map((item) => (
             <div key={item.id} className="dataRow">
               <span>{item.name}</span>
@@ -998,7 +1036,11 @@ export default function MapTrainer({
           setPosition={setPosition}
           setMapResetKey={setMapResetKey}
         />
+          </div>
+        )}
 
+        {panelTab === "mission" && (
+          <>
         <TrainingNotes />
 
         <div className="deconflictionPanel mapDeconflictionPanel">
@@ -1059,6 +1101,8 @@ export default function MapTrainer({
             </div>
           )}
         </div>
+          </>
+        )}
       </section>
 
       <section
