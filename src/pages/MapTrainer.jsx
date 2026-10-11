@@ -22,6 +22,7 @@ import PendingRouteLine from "../components/PendingRouteLine.jsx";
 import AttackRunMarkers from "../components/AttackRunMarkers.jsx";
 import ArtilleryOverlay from "../components/ArtilleryOverlay.jsx";
 import { recordMissionEvent } from "../utils/missionEvents.js";
+import { getNextControlPointName } from "../utils/controlPointNames.js";
 
 const savedTargets = "vintlander.targets";
 const savedObserverPosition = "vintlander.observerPosition";
@@ -468,15 +469,12 @@ export default function MapTrainer({
   }
 
   function buildControlPoint(pointPosition) {
-    const nextNumber =
-      controlPoints.filter((point) => point.type === controlPointType).length + 1;
-
     return {
       id: `${controlPointType.toUpperCase()}-${Date.now()}`,
       type: controlPointType,
       name:
         controlPointName.trim() ||
-        `${controlPointType.toUpperCase()} ${nextNumber}`,
+        getNextControlPointName(controlPointType, controlPoints),
       position: pointPosition,
       mgrs: mgrs.forward([pointPosition.lng, pointPosition.lat]),
       createdAt: new Date().toLocaleTimeString(),

@@ -31,6 +31,7 @@ import {
   findSafeTargetPosition,
   getReciprocalBattlePosition,
 } from "../utils/targetPlacement.js";
+import { getNextControlPointName } from "../utils/controlPointNames.js";
 
 const savedTrainingLogs = "vintlander.trainingLogs";
 const savedCallsigns = "vintlander.controllerCallsigns";
@@ -1198,11 +1199,10 @@ export default function TacpTraining({
     const position = parseMgrs(selfSetup.controlPointGrid);
     const type = selfSetup.controlPointType;
     const labelType = type.toUpperCase();
-    const existingCount =
-      selfSetupControlPoints.filter((point) => point.type === type).length +
-      controlPoints.filter((point) => point.type === type).length +
-      1;
-    const name = selfSetup.controlPointName.trim() || `${labelType} ${existingCount}`;
+    const existingPoints = [...controlPoints, ...selfSetupControlPoints];
+    const name =
+      selfSetup.controlPointName.trim() ||
+      getNextControlPointName(type, existingPoints);
 
     return {
       id: `${labelType}-${Date.now()}`,
@@ -1362,7 +1362,7 @@ export default function TacpTraining({
       const reciprocalBp = {
         id: `BP-SAFE-${Date.now()}`,
         type: "bp",
-        name: "SAFE",
+        name: getNextControlPointName("bp", initialControlPoints),
         position: reciprocalBpPosition,
         mgrs: mgrs.forward([
           reciprocalBpPosition.lng,
@@ -1379,7 +1379,10 @@ export default function TacpTraining({
       const reciprocalHa = {
         id: `HA-SAFE-${Date.now()}`,
         type: "ha",
-        name: "SAFE",
+        name: getNextControlPointName("ha", [
+          ...initialControlPoints,
+          reciprocalBp,
+        ]),
         position: reciprocalHaPosition,
         mgrs: mgrs.forward([
           reciprocalHaPosition.lng,
@@ -1483,14 +1486,12 @@ export default function TacpTraining({
   function saveDsControlPoint() {
     try {
       const position = parseMgrs(controlPointGrid);
-      const nextNumber =
-        controlPoints.filter((point) => point.type === controlPointType).length + 1;
       const point = {
         id: `${controlPointType.toUpperCase()}-${Date.now()}`,
         type: controlPointType,
         name:
           controlPointName.trim() ||
-          `${controlPointType.toUpperCase()} ${nextNumber}`,
+          getNextControlPointName(controlPointType, controlPoints),
         position,
         mgrs: mgrs.forward([position.lng, position.lat]),
         createdAt: getTimestamp(),
@@ -2345,7 +2346,7 @@ export default function TacpTraining({
 
           <div className="grid compactGrid">
             <label className="field">
-              IP/BP type
+              IP/BP/HA type
               <select
                 value={selfSetup.controlPointType}
                 onChange={(event) =>
@@ -2354,11 +2355,12 @@ export default function TacpTraining({
               >
                 <option value="ip">IP</option>
                 <option value="bp">BP</option>
+                <option value="ha">HA</option>
               </select>
             </label>
 
             <label className="field">
-              IP/BP name
+              IP/BP/HA name
               <input
                 value={selfSetup.controlPointName}
                 onChange={(event) =>
@@ -3537,12 +3539,13 @@ export default function TacpTraining({
                   >
                     <option value="ip">IP</option>
                     <option value="bp">BP</option>
+                    <option value="ha">HA</option>
                   </select>
                 </label>
               </div>
 
               <label className="field">
-                IP/BP name
+                IP/BP/HA name
                 <input
                   value={controlPointName}
                   onChange={(event) => setControlPointName(event.target.value)}
