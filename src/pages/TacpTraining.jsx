@@ -1414,14 +1414,29 @@ export default function TacpTraining({
         targets,
         initialControlPoints
       );
+      const existingBpIndexes = initialControlPoints
+        .map((point, index) => (point.type === "bp" ? index : -1))
+        .filter((index) => index >= 0);
+      const bpIndexToReposition =
+        existingBpIndexes.length >= 2 ? existingBpIndexes[0] : -1;
+      const bpExclusions = initialControlPoints
+        .filter((_, index) => index !== bpIndexToReposition)
+        .map((point) => point.position)
+        .filter(Boolean);
       const reciprocalBpPosition = getReciprocalBattlePosition(
         opPosition,
-        selfLedTarget.position
+        selfLedTarget.position,
+        5000,
+        bpExclusions
       );
+      const existingSafeBp = initialControlPoints[bpIndexToReposition];
       const reciprocalBp = {
-        id: `BP-SAFE-${Date.now()}`,
+        ...(existingSafeBp || {}),
+        id: existingSafeBp?.id || `BP-SAFE-${Date.now()}`,
         type: "bp",
-        name: getNextControlPointName("bp", initialControlPoints),
+        name:
+          existingSafeBp?.name ||
+          getNextControlPointName("bp", initialControlPoints),
         position: reciprocalBpPosition,
         mgrs: mgrs.forward([
           reciprocalBpPosition.lng,
@@ -1430,17 +1445,24 @@ export default function TacpTraining({
         createdAt: getTimestamp(),
         source: "Self-led reciprocal BP",
       };
+      const controlPointsWithSafeBp = existingSafeBp
+        ? initialControlPoints.map((point, index) =>
+            index === bpIndexToReposition ? reciprocalBp : point
+          )
+        : [...initialControlPoints, reciprocalBp];
       const reciprocalHaPosition = getReciprocalBattlePosition(
         opPosition,
         selfLedTarget.position,
-        10000
+        10000,
+        controlPointsWithSafeBp
+          .map((point) => point.position)
+          .filter(Boolean)
       );
       const reciprocalHa = {
         id: `HA-SAFE-${Date.now()}`,
         type: "ha",
         name: getNextControlPointName("ha", [
-          ...initialControlPoints,
-          reciprocalBp,
+          ...controlPointsWithSafeBp,
         ]),
         position: reciprocalHaPosition,
         mgrs: mgrs.forward([
@@ -1451,8 +1473,7 @@ export default function TacpTraining({
         source: "Self-led reciprocal HA",
       };
       const setupControlPoints = [
-        ...initialControlPoints,
-        reciprocalBp,
+        ...controlPointsWithSafeBp,
         reciprocalHa,
       ];
       const updatedTargets = [...targets, selfLedTarget];

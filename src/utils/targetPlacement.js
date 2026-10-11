@@ -1,6 +1,7 @@
 import { getDistanceMetres } from "./geo.js";
 
 const minimumControlPointSeparationMetres = 750;
+const minimumGeneratedControlPointSeparationMetres = 1500;
 const placementAttempts = 32;
 
 function offsetPosition(center, eastMetres, northMetres) {
@@ -52,7 +53,8 @@ export function findSafeTargetPosition(
 export function getReciprocalBattlePosition(
   opPosition,
   enemyPosition,
-  distanceMetres = 5000
+  distanceMetres = 5000,
+  exclusionPositions = []
 ) {
   const metresPerDegreeLat = 111320;
   const metresPerDegreeLng =
@@ -63,11 +65,43 @@ export function getReciprocalBattlePosition(
     (enemyPosition.lat - opPosition.lat) * metresPerDegreeLat;
   const enemyDistance = Math.hypot(enemyEastMetres, enemyNorthMetres) || 1;
 
-  return offsetPosition(
-    opPosition,
-    (-enemyEastMetres / enemyDistance) * distanceMetres,
-    (-enemyNorthMetres / enemyDistance) * distanceMetres
+  const reciprocalBearing = Math.atan2(
+    -enemyEastMetres / enemyDistance,
+    -enemyNorthMetres / enemyDistance
   );
+  const angleOffsets = [0, 15, -15, 30, -30, 45, -45, 60, -60];
+  let bestCandidate = null;
+  let bestSeparation = -1;
+
+  for (const angleOffset of angleOffsets) {
+    const bearing = reciprocalBearing + (angleOffset * Math.PI) / 180;
+    const candidate = offsetPosition(
+      opPosition,
+      Math.sin(bearing) * distanceMetres,
+      Math.cos(bearing) * distanceMetres
+    );
+    const separation = exclusionPositions.length
+      ? Math.min(
+          ...exclusionPositions.map((position) =>
+            getDistanceMetres(candidate, position)
+          )
+        )
+      : Number.POSITIVE_INFINITY;
+
+    if (separation >= minimumGeneratedControlPointSeparationMetres) {
+      return candidate;
+    }
+
+    if (separation > bestSeparation) {
+      bestCandidate = candidate;
+      bestSeparation = separation;
+    }
+  }
+
+  return bestCandidate;
 }
 
-export { minimumControlPointSeparationMetres };
+export {
+  minimumControlPointSeparationMetres,
+  minimumGeneratedControlPointSeparationMetres,
+};
